@@ -39,12 +39,16 @@
 .md-search__input { background-color: rgba(255, 255, 255, .55); }
 .md-search__input:hover { background-color: rgba(255, 255, 255, .75); }
 .md-search__input::placeholder { color: rgba(34, 31, 27, .55); }
-/* the footer (overrides/partials/footer.html): a light strip, the PINNSeek mark on the left, the lab's logo on the right */
+/* the footer (overrides/partials/footer.html): a light strip, the PINNSeek mark and the lab's logo on the left, the
+   number of visits on the right */
 .md-footer.pf-footer { background-color: #faf7f1; color: var(--pf-ink); border-top: 1px solid #e6dfd3; }
 .pf-footer__inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: .9rem .8rem; }
-.pf-footer__left { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.pf-footer__left { display: flex; align-items: center; gap: 1.6rem; flex-wrap: wrap; }
 .pf-footer__brand { display: inline-flex; align-items: center; color: var(--pf-ink); transition: opacity .15s; }
-.pf-footer__visits { font-size: .68rem; color: #6b6358; font-variant-numeric: tabular-nums; }
+.pf-footer__visits { display: inline-flex; align-items: center; gap: .3rem; font-size: .68rem; color: #6b6358;
+  font-variant-numeric: tabular-nums; }
+.pf-footer__visits[hidden] { display: none; }
+.pf-footer__visits svg { width: .9rem; height: .9rem; fill: currentColor; display: block; }
 .pf-footer__brand img { height: 1.7rem; width: auto; display: block; }
 .pf-footer__brand:hover, .pf-footer__lab:hover { opacity: .75; color: var(--pf-ink); }
 .pf-footer__lab { display: block; line-height: 0; border-radius: .3rem; overflow: hidden; transition: opacity .15s; }

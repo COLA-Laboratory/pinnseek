@@ -1,7 +1,8 @@
 {#-
   Footer of the site after the footer of OmniKnowledge (colalab.ai/OmniKnowledge; author, 2026-11-02): a light strip
-  with the PINNSeek logo, which holds the name, on the left, linked home, and the logo of COLA Laboratory on the right,
-  linked to its site. It replaces the footer of mkdocs-material 9.7.7, whose page links (navigation.footer) the site does not use.
+  with the PINNSeek logo, which holds the name, linked home, and the logo of COLA Laboratory, linked to its site, both on
+  the left, and the number of visits with a small icon on the right (author, 2026-11-09). It replaces the footer of
+  mkdocs-material 9.7.7, whose page links (navigation.footer) the site does not use.
 -#}
 <footer class="md-footer pf-footer">
   <div class="md-grid pf-footer__inner">
@@ -9,19 +10,21 @@
       <a class="pf-footer__brand" href="{{ config.extra.homepage | d(nav.homepage.url, true) | url }}">
         <img src="{{ config.theme.logo | url }}" alt="{{ config.site_name }}" width="428" height="99">
       </a>
-      {#- the total of GoatCounter (partials/integrations/analytics/goatcounter.html), shown once it has loaded -#}
-      {% if config.extra.analytics and config.extra.analytics.provider == "goatcounter" %}
-        <span class="pf-footer__visits" data-counter="https://{{ config.extra.analytics.code }}.goatcounter.com/counter/TOTAL.json" hidden></span>
-        <script>
-          (function (el) {
-            fetch(el.getAttribute("data-counter")).then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-              .then(function (d) { el.textContent = d.count + " visits"; el.hidden = false; }).catch(function () {});
-          })(document.currentScript.previousElementSibling);
-        </script>
-      {% endif %}
+      <a class="pf-footer__lab" href="https://colalab.ai/" target="_blank" rel="noopener" title="COLA Laboratory">
+        <img src="{{ 'assets/img/colalab.webp' | url }}" alt="COLA Laboratory: Computational Optimization for Learning and Adaptive Systems" width="600" height="158" loading="lazy">
+      </a>
     </div>
-    <a class="pf-footer__lab" href="https://colalab.ai/" target="_blank" rel="noopener" title="COLA Laboratory">
-      <img src="{{ 'assets/img/colalab.webp' | url }}" alt="COLA Laboratory: Computational Optimization for Learning and Adaptive Systems" width="600" height="158" loading="lazy">
-    </a>
+    {#- the total of GoatCounter (partials/integrations/analytics/goatcounter.html), shown once it has loaded -#}
+    {% if config.extra.analytics and config.extra.analytics.provider == "goatcounter" %}
+      <span class="pf-footer__visits" data-counter="https://{{ config.extra.analytics.code }}.goatcounter.com/counter/TOTAL.json" title="Visits counted by GoatCounter" hidden>
+        {% include ".icons/material/eye-outline.svg" %}<span></span>
+      </span>
+      <script>
+        (function (el) {
+          fetch(el.getAttribute("data-counter")).then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function (d) { el.lastElementChild.textContent = d.count + " visits"; el.hidden = false; }).catch(function () {});
+        })(document.currentScript.previousElementSibling);
+      </script>
+    {% endif %}
   </div>
 </footer>
