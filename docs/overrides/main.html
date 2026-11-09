@@ -1,0 +1,31 @@
+{#-
+  Base of every page (home.html and pf.html extend it): Material's base with Open Graph and Twitter tags, so that a link
+  shared in Slack, X, LinkedIn or WeChat shows a title, a description and a preview image (author, 2026-11-09: why the
+  site had no preview image while OmniKnowledge has one). The image is the first screen of the home page at 1200 x 630
+  px (assets/img/share.png).
+-#}
+{% extends "base.html" %}
+{% block site_meta %}
+  {{ super() }}
+  {% if page and page.is_homepage %}
+    {% set share_title = "PINNSeek: autonomous discovery of PINN solvers" %}
+    {% set share_url = config.site_url %}
+  {% else %}
+    {% set share_title = (page.title ~ " - " ~ config.site_name) if page and page.title else config.site_name %}
+    {% set share_url = page.canonical_url if page and page.canonical_url else config.site_url %}
+  {% endif %}
+  {% set share_text = page.meta.description if page and page.meta and page.meta.description else config.site_description %}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name }}">
+  <meta property="og:title" content="{{ share_title }}">
+  <meta property="og:description" content="{{ share_text }}">
+  <meta property="og:url" content="{{ share_url }}">
+  <meta property="og:image" content="{{ config.site_url }}assets/img/share.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The PINNSeek home page: Discover accurate and efficient PINN solvers, autonomously">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ share_title }}">
+  <meta name="twitter:description" content="{{ share_text }}">
+  <meta name="twitter:image" content="{{ config.site_url }}assets/img/share.png">
+{% endblock %}
