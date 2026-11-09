@@ -1,0 +1,80 @@
+/* Theme of the PINNSeek site: the warm palette of the discovery replay on Material's layout.
+   Results pages bring their own scoped styles (pf.css); this file only sets the shared colours and type. */
+:root {
+  --pf-ink: #221f1b;
+  --pf-accent: #bf5a34;
+  --pf-brown: #8a4526;
+  --pf-paper: #fbfaf6;
+  --md-primary-fg-color: #e2d4bf;             /* header and tabs: warm sand, a shade below the page */
+  --md-primary-fg-color--light: #ece2d3;
+  --md-primary-fg-color--dark: #d3c2a8;
+  --md-primary-bg-color: #221f1b;
+  --md-primary-bg-color--light: rgba(34, 31, 27, .68);
+  --md-accent-fg-color: var(--pf-accent);
+  --md-typeset-a-color: var(--pf-brown);
+}
+/* Material sets the link colour from the primary colour per colour scheme; keep it brown */
+[data-md-color-scheme] { --md-typeset-a-color: var(--pf-brown); }
+.md-header, .md-tabs { background-color: var(--md-primary-fg-color); }
+/* the whole logo of branding/pinnseek_logo, the network in its triangle and the name to its right, at every width
+   (author, 2026-11-05: "文字显示在右侧", "三角中应该是神经网络"): it replaces the site name in the header and the
+   footer, and the stacked logo and name of the drawer */
+/* lowered so that the capitals of the name, which the logo raises above the centre of its nabla, stand on the centre
+   line of the header with the tabs and the search box: ink measured at 29.0 px of 58 (author, 2026-11-05: "第一行元素
+   居中对齐"); the nabla carries its weight high, so it reads centred as well */
+.md-header__button.md-logo img { height: 1.7rem; position: relative; top: .045rem; }
+.md-header__topic:first-child { visibility: hidden; }
+@media screen and (max-width: 76.234375em) {
+  .md-header__button.md-logo { display: block; margin-left: 0; padding-left: .2rem; }
+  .md-header__button[for="__drawer"] { order: -1; }
+  .md-nav--primary .md-nav__title[for="__drawer"] { display: flex; align-items: center; height: 4.4rem; padding: 0 .8rem; font-size: 0; }
+  .md-nav--primary .md-nav__title[for="__drawer"] .md-logo { position: static; margin: 0; padding: 0; }
+  .md-nav--primary .md-nav__title[for="__drawer"] .md-logo img { height: 2.2rem; }
+}
+.md-typeset h1, .md-typeset h2 { color: var(--pf-ink); font-weight: 700; }
+.md-typeset a:hover { color: var(--pf-accent); }
+.md-typeset code { border-radius: 4px; }
+.md-header { box-shadow: 0 1px 0 rgba(60, 40, 20, .12); }
+.md-tabs { border-bottom: 1px solid rgba(60, 40, 20, .1); }
+.md-search__input { background-color: rgba(255, 255, 255, .55); }
+.md-search__input:hover { background-color: rgba(255, 255, 255, .75); }
+.md-search__input::placeholder { color: rgba(34, 31, 27, .55); }
+/* the footer (overrides/partials/footer.html): a light strip, the PINNSeek mark on the left, the lab's logo on the right */
+.md-footer.pf-footer { background-color: #faf7f1; color: var(--pf-ink); border-top: 1px solid #e6dfd3; }
+.pf-footer__inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: .9rem .8rem; }
+.pf-footer__brand { display: inline-flex; align-items: center; color: var(--pf-ink); transition: opacity .15s; }
+.pf-footer__brand img { height: 1.7rem; width: auto; display: block; }
+.pf-footer__brand:hover, .pf-footer__lab:hover { opacity: .75; color: var(--pf-ink); }
+.pf-footer__lab { display: block; line-height: 0; border-radius: .3rem; overflow: hidden; transition: opacity .15s; }
+.pf-footer__lab img { height: 2.2rem; width: auto; display: block; }
+/* results pages: full width, no Material typeset frame */
+.md-main__inner:has(.pf) { max-width: none; margin-top: 0; }
+.md-content:has(.pf) .md-content__inner { margin: 0; padding: 0; }
+.md-content:has(.pf) .md-content__inner::before { display: none; }
+.md-content:has(.pf) .md-source-file { display: none; }
+/* one bar on wide screens (author, 2026-10-22): the tabs sit in the header row after the title, so the header is a
+   single row; on narrow screens Material moves the tabs into the drawer as before */
+@media screen and (min-width: 76.25em) {
+  .md-tabs { position: absolute; top: 0; left: 0; right: 0; height: 100%; background: transparent; border-bottom: 0;
+    pointer-events: none; overflow: visible; }
+  .md-tabs > .md-grid { height: 100%; }
+  .md-tabs .md-tabs__list { display: flex; align-items: center; height: 100%; width: max-content; margin-left: 8.9rem;
+    pointer-events: auto; }
+  /* the tabs start after the logo, which holds the name, so the page title of a scrolled page stays hidden here */
+  .md-header__button.md-logo { margin-right: 0; padding-right: .2rem; }
+  [dir] .md-header__title { margin-left: .3rem; }
+  .md-header__topic { visibility: hidden; }
+  .md-tabs__item { height: auto; padding: 0 .55rem; }
+  .md-tabs__link { margin-top: 0; font-size: .74rem; }
+}
+/* the site name links home as the logo does (overrides/partials/header.html); hovering either dims both */
+.md-header__home, .md-header__home:hover, .md-header__home:focus-visible { color: inherit; }
+.md-header__home { transition: opacity .25s; }
+.md-header__inner:has(.md-logo:hover, .md-header__home:hover) :is(.md-logo, .md-header__home) { opacity: .7; }
+/* the repository link without its star and fork counts */
+.md-source__facts { display: none; }
+/* the open search takes the whole bar: the tabs folded into it step aside */
+@media screen and (min-width: 76.25em) {
+  [data-md-toggle="search"]:checked ~ .md-header .md-tabs { visibility: hidden; opacity: 0; }
+  .md-tabs { transition: opacity .15s ease, visibility 0s; }
+}

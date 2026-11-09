@@ -1,0 +1,36 @@
+{#- Results pages (home, benchmark, problems, data): full-width content generated from the paper's data,
+    styled by assets/css/pf.css (scoped under .pf) instead of Material's typeset. -#}
+{% extends "main.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  {%- set libs = page.meta.pf_libs or [] %}
+  <link rel="stylesheet" href="{{ 'assets/css/pf.css' | url }}">
+  {#- the benchmark overview, the case pages and the data page take the headings of the landing page #}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&display=swap">
+  {%- if 'math' in libs %}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" integrity="sha384-nB0miv6/jRmo5UMMR1wu3Gz6NLsoTkbqJghGIsx//Rlm+ZU03BU6SQNC66uf4l5+" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" integrity="sha384-7zkQWkzuo3B5mTepMUcHkMB5jZaolc2xDwL6VFqjFALcbeS9Ggm/Yr2r3Dy4lfFg" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk" crossorigin="anonymous"></script>
+  {%- endif %}
+  {%- if 'charts' in libs %}
+  <script defer src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js" integrity="sha384-Mx5lkUEQPM1pOJCwFtUICyX45KNojXbkWdYhkKUKsbv391mavbfoAmONbzkgYPzR" crossorigin="anonymous"></script>
+  {%- endif %}
+  {%- if 'code' in libs %}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+  {%- endif %}
+  <script defer src="{{ 'assets/js/pf.js' | url }}"></script>
+{% endblock %}
+
+{% block content %}
+  {{ page.content }}
+  <div class="pf">
+    <div class="lightbox" id="lightbox" role="dialog" aria-label="Enlarged figure"><img alt=""></div>
+    <dialog class="viewer" id="viewer" aria-label="File viewer"><div class="viewer-head"><div class="viewer-title"></div>
+    <div class="viewer-actions"><button type="button" class="viewer-copy">Copy</button><button type="button" class="viewer-close" aria-label="Close">&times;</button></div></div>
+    <div class="viewer-meta"></div><pre class="viewer-body"><code></code></pre></dialog>
+  </div>
+{% endblock %}

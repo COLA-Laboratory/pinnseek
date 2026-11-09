@@ -1,0 +1,409 @@
+"""Scale-PINN's Grey-Scott code, re-pointed at Kolmogorov flow.
+
+Scale-PINN publishes ac / gs / kdv / ks / ns-fps / ns-ldc / ns-naca / ns-rb and
+no Kolmogorov-flow case, so this is a port. Two of their cases are candidate
+donors and they disagree:
+
+  * `ns-rb` (Rayleigh-Benard) is their only *time-dependent Navier-Stokes*
+    case — the right physics — but its network hard-codes an aspect-ratio-4
+    box in its feature map ((x-1)/4, (x-2)/4, (x-3)/4, t/50) and its boundary
+    treatment is Dirichlet wall data, neither of which transfers to a periodic
+    unit square;
+  * `gs` (Grey-Scott) is their only *2D + time problem on a periodic square* —
+    the right domain — with the periodic-trace BC loss (`pbcx`/`pbcy`), the
+    frequency-annealed feature map on raw (x, y), and the IC-from-data
+    minibatch this task needs.
+
+The **code** donor is therefore `gs`: this file is
+`cases/gs/methods/scale_pinn/src.py` (itself their notebook, extracted
+verbatim) with the physics replaced, each change marked `[sota patch]`:
+
+  1. a third output head `last_layer_p` and a third periodic trace, so the
+     network returns (u, v, p) — Grey-Scott has two fields, this has three;
+  2. the derivative block returns the first derivatives the momentum and
+     continuity equations need (u_x, u_y, v_x, v_y, p_x, p_y) alongside the
+     Laplacians;
+  3. the residual is the task's three equations, including the Kolmogorov
+     body force 2 sin(4 pi y) on the x-momentum;
+  4. the sequential-correction (ER / ER_xx) term is written in the form the
+     paper gives for Navier-Stokes (its S_Mu / S_Mv / S_Cn, section
+     "lid-driven cavity"): the two momentum residuals get
+     (u^k - u^(k-1))/tau_sc - gamma/tau_alpha * (lap u^k - lap u^(k-1)) with
+     gamma = 1/Re = nu, and the continuity residual gets only
+     (p^k - p^(k-1))/tau_sc;
+  5. the data comes from the task's own `ref_data.csv` / grid rather than a
+     .mat, because Scale-PINN ships no Kolmogorov-flow dataset. As in all
+     their cases the labels enter the loss only at t = 0 (the `ic` mask); the
+     interior values ride along in the batch and multiply out.
+
+The **hyperparameters** are Table A1 row 5 (Rayleigh-Benard), their only
+time-dependent Navier-Stokes row: batch 4,000, 50k iterations, lr 5e-3,
+lambda_ic = 1, lambda_bc = 10, tau_sc = 0.1, tau_alpha = 1.5, 4*pi frequency
+annealing, silu. Those travel with the physics rather than with the code,
+which is why the frequency factor below is 4*pi where Grey-Scott's is 2*pi and
+`BS_ALL` is 4000 where Grey-Scott's is 1000.
+"""
+
+import jax
+import flax
+import optax
+from jax import lax, random, numpy as jnp
+from jax import random, grad, vmap, hessian, jacfwd, jit
+from jax import config
+from flax import linen as nn
+from evojax.util import get_params_format_fn
+
+import os
+import time
+import numpy as np
+import pandas as pd
+from scipy import io
+import matplotlib.pyplot as plt
+import argparse
+
+# [sota patch] the task's reference grid, this case's only dataset
+REF_CSV = '~/kf/task/ref_data.csv'
+
+# choose GPU
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
+#jax.config.update("jax_enable_x64", True)
+jax.config.update("jax_default_matmul_precision", "highest")
+
+"""DNN / PINN   """
+
+class PINN(nn.Module):
+    """PINNs"""
+    n_nodes: int
+    t_l: float
+    t_u: float
+    def setup(self):
+        self.layers = [nn.Dense(self.n_nodes, kernel_init = jax.nn.initializers.he_uniform()),
+                       jnp.sin,
+                       nn.Dense(self.n_nodes, kernel_init = jax.nn.initializers.he_uniform()),
+                       nn.silu,
+                       nn.Dense(self.n_nodes, kernel_init = jax.nn.initializers.he_uniform()),
+                       nn.silu,
+                       nn.Dense(self.n_nodes, kernel_init = jax.nn.initializers.he_uniform()),
+                       nn.silu]
+        self.last_layer_u = nn.Dense(1, kernel_init = jax.nn.initializers.he_uniform(), use_bias=False)
+        self.last_layer_v = nn.Dense(1, kernel_init = jax.nn.initializers.he_uniform(), use_bias=False)
+        # [sota patch] third head: this problem carries a pressure
+        self.last_layer_p = nn.Dense(1, kernel_init = jax.nn.initializers.he_uniform(), use_bias=False)
+
+    @nn.compact
+    def __call__(self, inputs):
+        # split the two variables, probably just by slicing
+        t, x, y = inputs[:,0:1], inputs[:,1:2], inputs[:,2:3]
+        def get_uv(t, x, y):
+            f = jnp.hstack([t - self.t_l, x, y, t - self.t_u])
+            fs = [f]
+            for i, lyr in enumerate(self.layers):
+                f = lyr(f)
+                if (i == 0):
+                    f = 4 *jnp.pi *f          # [sota patch] Table A1 row 5: 4 pi
+                if (i%2 != 0):
+                    fs.append(f)
+            f = jnp.hstack(fs)
+            u, v = self.last_layer_u(f), self.last_layer_v(f)
+            p = self.last_layer_p(f)          # [sota patch]
+            return (u, v, p)
+
+        u, v, p = get_uv(t, x, y)
+
+        # [sota patch] the momentum and continuity equations need first
+        # derivatives as well as the Laplacians
+        def get_uv_dir(get_uv, t, x, y):
+            u_t, v_t, p_t = jacfwd(get_uv)(t, x, y)
+            u_x, v_x, p_x = jacfwd(get_uv, argnums=1)(t, x, y)
+            u_y, v_y, p_y = jacfwd(get_uv, argnums=2)(t, x, y)
+            u_xx, v_xx, _ = jacfwd(jacfwd(get_uv, argnums=1), argnums=1)(t, x, y)
+            u_yy, v_yy, _ = jacfwd(jacfwd(get_uv, argnums=2), argnums=2)(t, x, y)
+            return (u_t, u_x, u_y, u_xx, u_yy,
+                    v_t, v_x, v_y, v_xx, v_yy, p_x, p_y)
+
+        f_dir_vmap = vmap(get_uv_dir, in_axes=(None, 0, 0, 0))
+        (u_t, u_x, u_y, u_xx, u_yy,
+         v_t, v_x, v_y, v_xx, v_yy, p_x, p_y) = f_dir_vmap(get_uv, t, x, y)
+        u_t, u_x, u_y = u_t[:,:,0], u_x[:,:,0], u_y[:,:,0]
+        v_t, v_x, v_y = v_t[:,:,0], v_x[:,:,0], v_y[:,:,0]
+        p_x, p_y = p_x[:,:,0], p_y[:,:,0]
+        u_xx, u_yy = u_xx[:,:,0,0], u_yy[:,:,0,0]
+        v_xx, v_yy = v_xx[:,:,0,0], v_yy[:,:,0,0]
+
+        diff_u = u_xx + u_yy
+        diff_v = v_xx + v_yy
+
+        # [sota patch] Kolmogorov flow in place of Grey-Scott:
+        # u_t + u*u_x + v*u_y + p_x - nu*(u_xx + u_yy) - 2*sin(4 pi y) = 0
+        # v_t + u*v_x + v*v_y + p_y - nu*(v_xx + v_yy)                 = 0
+        # u_x + v_y                                                    = 0
+        pde_u = u_t + u*u_x + v*u_y + p_x - nu*diff_u - 2.*jnp.sin(4.*jnp.pi*y)
+        pde_v = v_t + u*v_x + v*v_y + p_y - nu*diff_v
+        pde_c = u_x + v_y
+
+        # obtain BC/IC indices
+        ic, bcx, bcy = (t == t_l), (x == x_l), (y == y_l)  # lower x, lower y
+        u_xu, v_xu, p_xu = get_uv(t, jnp.ones_like(t)*x_u, y)
+        u_yu, v_yu, p_yu = get_uv(t, x, jnp.ones_like(t)*y_u)
+        pbcx_u, pbcx_v, pbcx_p = u_xu - u, v_xu - v, p_xu - p
+        pbcy_u, pbcy_v, pbcy_p = u_yu - u, v_yu - v, p_yu - p
+
+        outputs = jnp.hstack([u, v, p, diff_u, diff_v, pde_u, pde_v, pde_c,
+                              pbcx_u, pbcx_v, pbcx_p, pbcy_u, pbcy_v, pbcy_p,
+                              ic, bcx, bcy])
+        return outputs
+
+
+class DNN(nn.Module):
+    """DNNs"""
+    n_nodes: int
+    t_l: float
+    t_u: float
+    def setup(self):
+        self.layers = [nn.Dense(self.n_nodes, kernel_init = jax.nn.initializers.he_uniform()),
+                       jnp.sin,
+                       nn.Dense(self.n_nodes, kernel_init = jax.nn.initializers.he_uniform()),
+                       nn.silu,
+                       nn.Dense(self.n_nodes, kernel_init = jax.nn.initializers.he_uniform()),
+                       nn.silu,
+                       nn.Dense(self.n_nodes, kernel_init = jax.nn.initializers.he_uniform()),
+                       nn.silu]
+        self.last_layer_u = nn.Dense(1, kernel_init = jax.nn.initializers.he_uniform(), use_bias=False)
+        self.last_layer_v = nn.Dense(1, kernel_init = jax.nn.initializers.he_uniform(), use_bias=False)
+        self.last_layer_p = nn.Dense(1, kernel_init = jax.nn.initializers.he_uniform(), use_bias=False)
+
+    @nn.compact
+    def __call__(self, inputs):
+        t, x, y = inputs[:,0:1], inputs[:,1:2], inputs[:,2:3]
+        def get_uv(t, x, y):
+            f = jnp.hstack([t - self.t_l, x, y, t - self.t_u])
+            fs = [f]
+            for i, lyr in enumerate(self.layers):
+                f = lyr(f)
+                if (i == 0):
+                    f = 4 *jnp.pi *f
+                if (i%2 != 0):
+                    fs.append(f)
+            f = jnp.hstack(fs)
+            u, v = self.last_layer_u(f), self.last_layer_v(f)
+            p = self.last_layer_p(f)
+            return (u, v, p)
+
+        u, v, p = get_uv(t, x, y)
+
+        def get_uv_dir(get_uv, t, x, y):
+            u_xx, v_xx, _ = jacfwd(jacfwd(get_uv, argnums=1), argnums=1)(t, x, y)
+            u_yy, v_yy, _ = jacfwd(jacfwd(get_uv, argnums=2), argnums=2)(t, x, y)
+            return u_xx, u_yy, v_xx, v_yy
+
+        f_dir_vmap = vmap(get_uv_dir, in_axes=(None, 0, 0, 0))
+        u_xx, u_yy, v_xx, v_yy = f_dir_vmap(get_uv, t, x, y)
+        u_xx, u_yy = u_xx[:,:,0,0], u_yy[:,:,0,0]
+        v_xx, v_yy = v_xx[:,:,0,0], v_yy[:,:,0,0]
+
+        outputs = jnp.hstack([u, v, p, u_xx + u_yy, v_xx + v_yy])
+        return outputs
+
+
+def main(ER, ER_xx, weight_ic, weight_bc, max_lr, exponent, max_iter, seed, gpu, T_0, T_1, pred_T):
+    
+    
+    # [sota patch] Kolmogorov-flow viscosity in place of Grey-Scott's six constants
+    global nu
+    nu = 5e-4                       # Re = 2000, the task's value
+
+    # [sota patch] Scale-PINN ships no Kolmogorov-flow dataset, so the grid and
+    # the t = 0 slice come from the task's own reference file (columns
+    # t, x, y, u, v, p). As in every Scale-PINN case the labels enter the loss
+    # only through the `ic` mask.
+    csv = np.loadtxt(REF_CSV, delimiter=',', skiprows=1, dtype=np.float64)
+    sim_t, sim_x, sim_y = csv[:,0:1], csv[:,1:2], csv[:,2:3]
+    sim_u, sim_v, sim_p = csv[:,3:4], csv[:,4:5], csv[:,5:6]
+
+    data_X, data_Y = np.hstack([sim_t, sim_x, sim_y]), np.hstack([sim_u, sim_v, sim_p])
+    data_X, data_Y = data_X[(data_X[:,0] >= T_0) & (data_X[:,0] <= T_1)], data_Y[(data_X[:,0] >= T_0) & (data_X[:,0] <= T_1)]
+    
+    global t_l, t_u, x_l, x_u, y_l, y_u
+
+    t_l, t_u = np.min(data_X[:,0]), np.max(data_X[:,0])
+    x_l, x_u, y_l, y_u = np.min(data_X[:,1]), np.max(data_X[:,1]), np.min(data_X[:,2]), np.max(data_X[:,2])
+    # [sota patch] the reference grid is CELL-CENTRED (0.001953125 to
+    # 0.994140625), so x_u - x_l is 0.9921875 -- one cell short of the period 1.
+    # Their donor's grid included both endpoints, so `pbcx = u(t,x_u,y) -
+    # u(t,x_l,y)` was the periodic condition as written; here those two columns
+    # are not a period apart and the true solution violates that pairing at rms
+    # 0.082 against a field rms of 0.763. The period is 1 wherever the samples
+    # sit, so x_u/y_u become x_l+1 / y_l+1 and the term becomes the periodicity
+    # itself. Same trap and same patch as the ib and rt cases.
+    x_u = x_l + 1.0
+    y_u = y_l + 1.0
+
+    # IC from previous solution
+    if len(pred_T) > 0:
+        _t = (data_X[:,0] == t_l)
+        data_Y[_t] = pred_T
+        print ('Use previous PINN solution as IC.')
+        
+    # split into BC / IC data
+    ic = (data_X[:,0] == t_l)
+    bc = (data_X[:,1] == x_l) | (data_X[:,2] == y_l)
+    data_X_IC, data_Y_IC, data_X_BC, data_Y_BC = data_X[ic], data_Y[ic], data_X[bc], data_Y[bc]
+    
+    # convert to jnp
+    data_X, data_Y = jnp.array(data_X), jnp.array(data_Y)
+    data_X_IC, data_Y_IC, data_X_BC, data_Y_BC = jnp.array(data_X_IC), jnp.array(data_Y_IC), jnp.array(data_X_BC), jnp.array(data_Y_BC)
+    
+    
+    # choose seed
+    seed = seed
+    key, rng = random.split(random.PRNGKey(seed))
+
+    # dummy input
+    a = random.normal(key, [1,3])
+
+    # initialization call
+    n_nodes = 128
+    model, model_0 = PINN(n_nodes, t_l, t_u), DNN(n_nodes, t_l, t_u)
+    params = model.init(key, a)
+    num_params, format_params_fn = get_params_format_fn(params)
+    # print (num_params)
+
+    # flatten initial params
+    params = jax.flatten_util.ravel_pytree(params)[0]
+
+    # update u_0
+    params_0 = params
+
+    # minibatch (set #sample)
+    BS_ALL = 4000                 # [sota patch] Table A1 row 5 (Rayleigh-Benard)
+    # [sota patch] the table gives only the total batch. BS_IC/BS_BC are the
+    # donor's 50/50 scaled by the same 4x as BS_ALL (1000 -> 4000), so the
+    # interior/IC/BC proportions of the donor's minibatch are preserved.
+    BS_IC = 200
+    BS_BC = 200
+    
+    n_all, n_ic, n_bc = len(data_X), len(data_X_IC), len(data_X_BC)
+
+    @jit
+    def minibatch(key):
+        key1, key2, key3, key4, key5, key6 = key
+        batch_all = random.choice(key1, n_all, (BS_ALL - BS_IC - BS_BC,))
+        batch_ic = random.choice(key2, n_ic, (BS_IC,)) 
+        batch_bc = random.choice(key3, n_bc, (BS_BC,)) 
+        batch_R = jnp.hstack([random.uniform(key4, shape=(BS_ALL, 1), minval=t_l, maxval=t_u),
+                              random.uniform(key5, shape=(BS_ALL, 1), minval=x_l, maxval=x_u),
+                              random.uniform(key6, shape=(BS_ALL, 1), minval=y_l, maxval=y_u)])
+        batch_X = jnp.vstack([data_X[batch_all], data_X_IC[batch_ic], data_X_BC[batch_bc], batch_R])
+        batch_Y = jnp.vstack([data_Y[batch_all], data_Y_IC[batch_ic], data_Y_BC[batch_bc]])
+        return (batch_X, batch_Y)   
+
+    # loss function
+    def eval_loss(params, params_0, inputs, labels):
+        pred = model.apply(format_params_fn(params), inputs)
+        (u, v, p, diff_u, diff_v, pde_u, pde_v, pde_c,
+         pbcx_u, pbcx_v, pbcx_p, pbcy_u, pbcy_v, pbcy_p,
+         ic, bcx, bcy) = jnp.split(pred, 17, axis=1)
+        # stable evolution
+        pred_0 = model_0.apply(format_params_fn(params_0), inputs)
+        u_0, v_0, p_0, diff_u_0, diff_v_0 = jnp.split(pred_0, 5, axis=1)
+        if (ER > 0):
+            # [sota patch] the paper's Navier-Stokes form of the sequential
+            # correction (its S_Mu / S_Mv / S_Cn), with gamma = 1/Re = nu
+            pde_u = pde_u + (u - u_0) / ER - nu*(diff_u - diff_u_0) / ER_xx  # ER @PDE
+            pde_v = pde_v + (v - v_0) / ER - nu*(diff_v - diff_v_0) / ER_xx  # ER @PDE
+            pde_c = pde_c + (p - p_0) / ER
+        pde_loss = jnp.mean(jnp.square(pde_u)) + jnp.mean(jnp.square(pde_v)) + jnp.mean(jnp.square(pde_c))
+        # remove random uniform sample
+        u, v, ic = u[:BS_ALL], v[:BS_ALL], ic[:BS_ALL]
+        # IC — [sota patch] only the velocity is prescribed; the pressure of an
+        # incompressible flow is defined up to a constant and the task does not
+        # score it, so it is left free
+        ic_e = (labels[:, 0:2] - jnp.hstack([u, v])) * ic
+        ic_loss = jnp.sum(jnp.square(ic_e)) / ic.sum()
+        # BC (periodic)
+        bcx_e = jnp.hstack([pbcx_u, pbcx_v, pbcx_p]) * bcx
+        bcy_e = jnp.hstack([pbcy_u, pbcy_v, pbcy_p]) * bcy
+        bc_loss = jnp.sum(jnp.square(bcx_e)) / bcx.sum() + jnp.sum(jnp.square(bcy_e)) / bcy.sum()
+        # mse
+        mse = jnp.mean(jnp.square(labels[:, 0:2] - jnp.hstack([u, v])))
+        rl2 = jnp.linalg.norm(labels[:, 0:2] - jnp.hstack([u, v])) / jnp.linalg.norm(labels[:, 0:2])
+        loss = pde_loss + weight_ic* ic_loss + weight_bc* bc_loss #+ er_loss
+        return loss, (mse, rl2)
+
+    loss_grad = jax.jit(jax.value_and_grad(eval_loss, has_aux=True))
+
+    # weights update
+    @jit
+    def update(params, params_0, opt_state, key):
+        batch_X, batch_Y = minibatch(key)
+        (loss, (mse, rl2)), grad = loss_grad(params, params_0, batch_X, batch_Y)
+        updates, opt_state = optimizer.update(grad, opt_state)
+        params_0 = params # update u_0
+        params = optax.apply_updates(params, updates)
+        return params, params_0, opt_state, loss, mse, rl2
+
+    # optimizer
+    max_iters = max_iter
+    max_lr = max_lr
+    lr_scheduler = optax.warmup_cosine_decay_schedule(init_value=max_lr, peak_value=max_lr, warmup_steps=0,
+                                                    decay_steps=max_iters, end_value=1e-10, exponent=exponent)
+    optimizer = optax.adam(learning_rate=lr_scheduler) # Choose the method
+    opt_state = optimizer.init(params)
+
+    """Training"""
+
+    # training iteration
+    runtime = 0
+    train_iters = 0
+
+    #store = []
+    store_nnws = []
+    store_nnws.append([0, format_params_fn(params)])
+
+    while (train_iters <= max_iters) and (runtime < 10000):
+        # mini-batch update
+        start = time.time()
+        key1, key2, key3, key4, key5, key6, rng = random.split(rng, 7) # update random generator
+        params, params_0, opt_state, loss, mse, rl2 = update(params, params_0, opt_state, (key1, key2, key3, key4, key5, key6))
+        end = time.time()
+        runtime += (end-start)
+        # append weights
+        if (train_iters % 3000 == 0):
+            print ('iter. = %05d,  time = %03ds,  loss = %.2e  |  mse = %.2e,  rl2 = %.2e'%(train_iters, runtime, loss, mse, rl2))
+            # store.append([train_iters, runtime, loss, mse, rl2])
+            store_nnws.append([runtime, format_params_fn(params)])
+        train_iters += 1
+
+    #store = jnp.array(store)
+
+    """PINN solution"""
+
+    # solution
+    _t = (data_X[:,0] == t_u)
+    inputs, labels = data_X[_t], data_Y[_t]
+    pred = model_0.apply(format_params_fn(params), inputs)
+    u, v, _, _, _ = jnp.split(pred, 5, axis=1)
+    mse = jnp.mean(jnp.square(labels[:, 0:2] - jnp.hstack([u, v])))
+    rl2 = jnp.linalg.norm(labels[:, 0:2] - jnp.hstack([u, v])) / jnp.linalg.norm(labels[:, 0:2])
+    print ('[T = %s - %s] :  MSE = %.2e  RL2 = %.2e'%(t_l, t_u, mse, rl2))
+
+    # save outcome
+    save_results = [ER, ER_xx, weight_ic, weight_bc, max_lr, exponent, max_iter, seed, round(runtime)]
+    file_path = 'gs_T=0-2s_batch_run_%s.txt'%(gpu)
+    with open(file_path, 'a') as f:
+        for value in save_results:
+            f.write(f"{value},")
+        f.write(f"{mse:.2e},")
+        f.write(f"{rl2:.2e}\n")
+
+    # info. to pass down to next time window..
+    params_T = format_params_fn(params)
+    pred_T = jnp.hstack([u, v])
+    
+    return params_T, pred_T, store_nnws
+
+# # T = 0 - 0.5
+# params_T0, pred_T0 = main(ER=0.015, ER_xx=10, weight_ic=5000, weight_bc=1000,
+#                           max_lr=2e-3, exponent=1, max_iter=300000, seed=20, gpu=0,
+#                           T_0=0.0, T_1=0.5, pred_T=[])

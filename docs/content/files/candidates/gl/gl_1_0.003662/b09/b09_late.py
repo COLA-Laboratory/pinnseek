@@ -1,0 +1,439 @@
+"""b09_prop with the propagator-consistency term switched on only for the last
+20000 steps: the term costs 60% of the step rate, so this buys back steps and
+spends the consistency signal where the core profile is actually being set."""
+from __future__ import annotations
+
+# ═══════════════════════════════════════════════════════════════
+# PDE CONSTANTS — DO NOT MODIFY (frozen header, byte-identical to parent)
+# ═══════════════════════════════════════════════════════════════
+
+# --- I/O shape ---
+INPUT_DIM    = 3
+OUTPUT_DIM   = 2
+INPUT_NAMES  = ("t", "x", "y")
+FIELD_NAMES  = ("u", "v")
+
+# --- Domain ---
+T_MIN, T_MAX = 0.0, 0.79
+X_MIN, X_MAX = -1.0, 1.0
+Y_MIN, Y_MAX = -1.0, 1.0
+HAS_TIME = True
+
+# --- Equation structure ---
+TIME_DERIV_ORDER        = 1
+MAX_SPATIAL_DERIV_ORDER = 2
+N_RESIDUAL_COMPONENTS   = 2   # ru, rv
+HAS_SOURCE              = False  # no forcing: every term carries u or v
+
+# --- Boundary topology ---
+BOUNDARY_NAMES = ("x_lo", "x_hi", "y_lo", "y_hi")
+PERIODIC_AXES  = ("x", "y")   # u(t, X_MIN, y) = u(t, X_MAX, y), likewise in y
+GEOMETRY_KIND  = "periodic_box"
+
+# --- Physical parameters ---
+EPS = 0.004      # diffusivity, identical for u and v
+K   = 10.0       # reaction rate
+C   = 1.5        # nonlinear phase coefficient in -(1 + i c) |A|^2 A
+
+# --- Training budget ---
+import os as _os, time as _time
+_T0 = float(_os.environ.get("FORGE_T0", _time.time()))  # process-start wall anchor
+TRAIN_TIME = 300.0     # total wall-clock seconds for the WHOLE process,
+                       # from _T0: imports, JIT compile, training and param
+                       # save all included — eval.py kills the process at
+                       # this wall; return params with margin to spare
+MAX_ITER   = 1_000_000 # safety cap on the loop (not expected to bind)
+
+# --- Eval gate: full fidelity only under task/eval.py ---
+if _os.environ.get("FORGE_EVAL_TOKEN") != "task/eval.py":
+    TRAIN_TIME = 10.0                                # off-eval runs are smoke:
+    _os.environ.setdefault("JAX_PLATFORMS", "cpu")   # CPU, 10 s
+# ═══════════════════════════════════════════════════════════════
+
+import time
+from typing import Any, Callable
+
+import jax
+import jax.numpy as jnp
+from jax import jit, random
+import jax.flatten_util
+import numpy as np
+import optax
+from flax import linen as nn
+
+
+# ══════════ architecture / training hyper-parameters ══════════
+
+N_HARM   = 6      # Fourier harmonics per space axis (exact 2-periodicity)
+WIDTH    = 128
+DEPTH    = 5      # modified-MLP gated updates = DEPTH - 1
+N_SLICE  = 96     # time slices per batch (causal ordering)
+N_PT     = 16     # spatial collocation points per slice
+LR0      = 1e-3
+DECAY    = 0.6
+DECAY_EVERY = 14000   # 4 decay periods over N_STEPS (b06 protocol)
+EPS0     = 1e-3   # causal tolerance, held so that min(w) stays in [W_LO, W_HI]
+EPS_MAX  = 1e6
+EPS_MIN  = 1e-6
+W_LO     = 0.93
+W_HI     = 0.995
+CHECK_EVERY = 200
+XI       = 0.02   # vortex healing length sqrt(EPS/K); core saturation limit
+KAPPA    = 1.0    # soft cap on the per-point squared residual
+G_CLAMP  = 5.0    # soft bound on the log-amplitude correction
+W_AMP    = 0.1    # max relative warp of the base's Gaussian radius^2
+N_STEPS  = 56000   # total steps of the SURVIVING replica
+S2       = 36000   # step at which the propagator term switches on
+LG_AMP   = 0.5    # max local log-gain on m_lin = a local saturation-time shift
+SAVE_MARGIN_S = 8.0
+M_REP    = 6     # phase-1 replicas: independent init, shared batch
+S1       = 8000        # phase-1 length; then one replica is kept
+SEL_RULE = "max"  # which replica survives: max / min / first field norm
+NSEL_T, NSEL_S = 40, 48    # coarse (t, x, y) grid the selection norm is taken on
+
+# --- propagator-consistency term (phase 2 only) ---
+NG       = 96     # torus grid the consistency is evaluated on (dx = 0.021)
+TAU      = 0.02   # consistency horizon
+NSUB     = 4      # Strang sub-steps inside one horizon
+NCH      = 3      # consecutive horizons per step -> NCH+1 grid evaluations
+LAM_P    = 1.0    # weight on L_prop / TAU^2 (that ratio is ~1 at the champion)
+
+# --- analytic base ---
+S0     = 0.02     # sigma^2 of A0's Gaussian: exp(-r^2/(2 S0)) = exp(-25 r^2)
+PHI_S  = 1.0      # INITIAL values of the four trainable base scalars;
+DIF    = 0.6      # dif, xi and pre are modulated by exp(tanh(.)) / tanh(.)
+PRE    = 2.0      # so they stay inside a factor e / +-1 of these
+
+
+# ══════════ network: exact-periodic embedding + modified MLP ══════════
+
+class PeriodicModifiedMLP(nn.Module):
+    """(t,x,y) -> [t/T, cos/sin(m*pi*x), cos/sin(m*pi*y)] embedding (exactly
+    2-periodic in x and y, so the periodic BCs hold to machine precision)
+    -> Wang et al. modified MLP -> (g, h), zero-initialised so the untrained
+    ansatz is exactly the analytic base."""
+    hidden: int = WIDTH
+    depth: int = DEPTH
+    n_harm: int = N_HARM
+
+    @nn.compact
+    def __call__(self, X):
+        kinit = jax.nn.initializers.glorot_normal()
+        t = X[:, 0:1] / T_MAX
+        x = X[:, 1:2]
+        y = X[:, 2:3]
+        w = jnp.pi * jnp.arange(1, self.n_harm + 1, dtype=X.dtype)   # period 2
+        h = jnp.concatenate(
+            [t,
+             jnp.cos(x * w), jnp.sin(x * w),
+             jnp.cos(y * w), jnp.sin(y * w)], axis=1)
+        act = nn.tanh
+        U = act(nn.Dense(self.hidden, kernel_init=kinit)(h))
+        V = act(nn.Dense(self.hidden, kernel_init=kinit)(h))
+        H = act(nn.Dense(self.hidden, kernel_init=kinit)(h))
+        for _ in range(self.depth - 1):
+            Z = act(nn.Dense(self.hidden, kernel_init=kinit)(H))
+            H = (1.0 - Z) * U + Z * V
+        out = nn.Dense(OUTPUT_DIM + 2, kernel_init=jax.nn.initializers.zeros)(H)
+        # extra channels: the trainable scalars of the analytic base
+        z = jnp.zeros((X.shape[0], 1), dtype=out.dtype)
+        cols = [out] + [z + self.param(n, jax.nn.initializers.zeros, ())
+                        for n in ("phi_tau", "dif_tau", "xi_tau", "pre_tau",
+                                  "nu_tau", "xip_tau")]
+        return jnp.concatenate(cols, axis=1)
+
+
+# ══════════ analytic base: linear growth + diffusion, then saturation ══════════
+
+def _base_field(t, x, y, phi, dif, xi, pre, wrp, nu, xip, lg):
+    """A0 = 10 (x + i y) exp(-r^2 / (2 S0)) is a degree-1 harmonic polynomial
+    times a Gaussian, so the LINEAR flow A_t = eps lap A + k A keeps its shape
+    exactly:  A_lin = e^{k t} 10 (x+iy) (S0/s)^2 exp(-r^2/(2 s)),
+    s = S0 + 2 eps t.  The logistic saturation of |A|^2 with the healing-length
+    ceiling sc = r^2/(r^2+xi^2) and the closed-form nonlinear phase
+    -(c/2) sc ln D are then applied to it; D = 1 at t = 0, so the IC is exact
+    and the zero-initialised network starts the run at this base."""
+    s = S0 + 2.0 * EPS * dif * t
+    g = (S0 / s) ** pre
+    e = g * jnp.exp(-(x ** 2 + y ** 2) * (1.0 + wrp) / (2.0 * s))
+    ux, uy = 10.0 * x * e, 10.0 * y * e
+    # lg is a LOCAL log-gain on the linear amplitude: exp(lg) = exp(2 K dt),
+    # i.e. the point saturates dt = lg/(2K) earlier/later, and its accumulated
+    # phase moves with it.  lg = 0 at t = 0, so the hard IC is untouched.
+    m_lin = (ux ** 2 + uy ** 2) * jnp.exp(2.0 * K * t + lg)  # |A_linear|^2
+    # periodic squared distance to the vortex (= x^2 + y^2 near the origin)
+    rp2 = (4.0 / jnp.pi ** 2) * (jnp.sin(0.5 * jnp.pi * x) ** 2
+                                 + jnp.sin(0.5 * jnp.pi * y) ** 2)
+    sc = rp2 / (rp2 + xip ** 2)
+    D = 1.0 + m_lin * (-jnp.expm1(-2.0 * K * t)) \
+        * ((rp2 + xi ** 2) / (rp2 + 1e-20)) ** nu
+    amp = jnp.exp(K * t) / jnp.sqrt(D)
+    p = -0.5 * C * phi * sc * jnp.log(D)
+    cp, sp = jnp.cos(p), jnp.sin(p)
+    return amp * (ux * cp - uy * sp), amp * (ux * sp + uy * cp)
+
+
+def _sym_combine(uv):
+    """uv: [N*4, 2] raw (u,v), rows grouped in rotation orbits q_j = R^j q_0,
+    R(x,y) = (-y,x).  The true solution obeys A(R p) = i A(p) (b00 §4), so
+    project onto that subspace: S = 1/4 sum_j (-i)^j A(q_j), A_sym(q_j) = i^j S."""
+    z = uv.reshape(-1, 4, 2)
+    u, v = z[..., 0], z[..., 1]
+    sre = 0.25 * (u[:, 0] + v[:, 1] - u[:, 2] - v[:, 3])
+    sim = 0.25 * (v[:, 0] - u[:, 1] - v[:, 2] + u[:, 3])
+    ou = jnp.stack([sre, -sim, -sre, sim], axis=1)
+    ov = jnp.stack([sim, sre, -sim, -sre], axis=1)
+    return jnp.stack([ou, ov], axis=2).reshape(-1, 2)
+
+
+def _orbit(X):
+    """[N, 3] -> [4N, 3] with rows (p, Rp, R^2 p, R^3 p) contiguous per point."""
+    t, x, y = X[:, 0], X[:, 1], X[:, 2]
+    xs = jnp.stack([x, -y, -x, y], axis=1)
+    ys = jnp.stack([y, x, -y, -x], axis=1)
+    ts = jnp.broadcast_to(t[:, None], xs.shape)
+    return jnp.stack([ts, xs, ys], axis=2).reshape(-1, INPUT_DIM)
+
+
+def _ansatz(model_apply, params, X):
+    """A = A_base * exp(t g + i t h), network zero-initialised."""
+    t, x, y = X[:, 0:1], X[:, 1:2], X[:, 2:3]
+    N = model_apply(params, X)
+    uL, vL = _base_field(t, x, y,
+                         PHI_S + N[:, 4:5],
+                         DIF * jnp.exp(jnp.tanh(N[:, 5:6])),
+                         XI * jnp.exp(jnp.tanh(N[:, 6:7])),
+                         PRE + jnp.tanh(N[:, 7:8]),
+                         W_AMP * jnp.tanh(t * N[:, 2:3] / T_MAX),
+                         jnp.exp(0.7 * jnp.tanh(N[:, 8:9])),
+                         XI * jnp.exp(jnp.tanh(N[:, 9:10])),
+                         LG_AMP * jnp.tanh(t * N[:, 3:4] / T_MAX))
+    g = G_CLAMP * jnp.tanh(t * N[:, 0:1] / G_CLAMP)
+    h = t * N[:, 1:2]
+    eg, ch, sh = jnp.exp(g), jnp.cos(h), jnp.sin(h)
+    return jnp.concatenate([eg * (uL * ch - vL * sh),
+                            eg * (uL * sh + vL * ch)], axis=1)
+
+
+# ══════════ training ══════════
+
+_MODEL = PeriodicModifiedMLP()
+
+
+def _prop_grid():
+    xs = jnp.linspace(X_MIN, X_MAX, NG, endpoint=False)
+    Xg, Yg = jnp.meshgrid(xs, xs, indexing="ij")
+    q = jnp.pi * jnp.fft.fftfreq(NG, d=1.0 / NG)               # period 2
+    return jnp.stack([Xg.ravel(), Yg.ravel()], axis=1), q[:, None] ** 2 + q[None, :] ** 2
+
+
+def _react(Z, h):
+    """Exact pointwise flow of A_t = k(A - (1+ic)|A|^2 A) over h (b01's closed
+    form): |A|^2 is logistic and the phase integrates to -(c/2) ln D."""
+    m = Z.real ** 2 + Z.imag ** 2
+    D = 1.0 + m * jnp.expm1(2.0 * K * h)
+    return Z * (jnp.exp(K * h) / jnp.sqrt(D)) * jnp.exp(-0.5j * C * jnp.log(D))
+
+
+def _propagate(Z, q2):
+    """Strang split-step over TAU: reaction in closed form, diffusion exactly
+    in Fourier (the torus makes exp(-eps q^2 h) a diagonal multiplier).  Its
+    linearisation is a CONTRACTION at every wavenumber, where the PDE
+    residual's is amplified by eps q^2 (~10 k at the vortex core)."""
+    h = TAU / NSUB
+    dk = jnp.exp(-EPS * q2 * h)
+    for _ in range(NSUB):
+        Z = _react(Z, 0.5 * h)
+        Z = jnp.fft.ifft2(jnp.fft.fft2(Z) * dk)
+        Z = _react(Z, 0.5 * h)
+    return Z
+
+
+def _make_loss(unravel):
+    t_slice = jnp.linspace(T_MIN, T_MAX, N_SLICE + 1)[1:]      # (0, T]
+    dt_slice = (T_MAX - T_MIN) / N_SLICE
+    XYg, q2g = _prop_grid()
+
+    def prop_loss(pf, t0):
+        tt = t0 + TAU * jnp.arange(NCH + 1, dtype=jnp.float32)      # [NCH+1]
+        B = jnp.concatenate(
+            [jnp.broadcast_to(tt[:, None, None], (NCH + 1, NG * NG, 1)),
+             jnp.broadcast_to(XYg[None], (NCH + 1, NG * NG, 2))], axis=2
+        ).reshape(-1, INPUT_DIM)
+        uv = _ansatz(_MODEL.apply, unravel(pf), B).reshape(NCH + 1, NG, NG, 2)
+        Z = uv[..., 0] + 1j * uv[..., 1]
+        return jnp.mean(jnp.abs(Z[1:] - _propagate(Z[:-1], q2g)) ** 2) / TAU ** 2
+
+    def slice_residuals(pf, XY, ts):
+        tt = jnp.broadcast_to(ts[:, None, None], XY.shape[:2] + (1,))
+        B = jnp.concatenate([tt, XY], axis=2).reshape(-1, INPUT_DIM)
+
+        f = lambda Z: _ansatz(_MODEL.apply, unravel(pf), Z)
+        z = jnp.zeros_like(B)
+        Et = z.at[:, 0].set(1.0)
+        Ex = z.at[:, 1].set(1.0)
+        Ey = z.at[:, 2].set(1.0)
+
+        uv, d_t = jax.jvp(f, (B,), (Et,))
+        _, d_xx = jax.jvp(lambda Z: jax.jvp(f, (Z,), (Ex,))[1], (B,), (Ex,))
+        _, d_yy = jax.jvp(lambda Z: jax.jvp(f, (Z,), (Ey,))[1], (B,), (Ey,))
+
+        u, v = uv[:, 0], uv[:, 1]
+        m2 = u ** 2 + v ** 2
+        r_u = d_t[:, 0] - EPS * (d_xx[:, 0] + d_yy[:, 0]) - K * (u - u * m2 + C * v * m2)
+        r_v = d_t[:, 1] - EPS * (d_xx[:, 1] + d_yy[:, 1]) - K * (v - v * m2 - C * u * m2)
+        s = (r_u ** 2 + r_v ** 2).reshape(N_SLICE, N_PT)
+        return jnp.mean(s / (1.0 + s / KAPPA), axis=1)
+
+    def loss_one(pf, XY, ts, eps, t0):
+        Ls = slice_residuals(pf, XY, ts)
+        cum = jnp.concatenate([jnp.zeros((1,)), jnp.cumsum(Ls)[:-1]])
+        w = jax.lax.stop_gradient(jnp.exp(-eps * cum))
+        return jnp.mean(w * Ls), jnp.min(w)
+
+    def loss_one_p(pf, XY, ts, eps, t0):
+        L, wmin = loss_one(pf, XY, ts, eps, t0)
+        return L + LAM_P * prop_loss(pf, t0), wmin
+
+    return loss_one, loss_one_p, t_slice, dt_slice
+
+
+def _make_update(loss_one, t_slice, dt_slice, optimizer):
+    """Jitted Adam step; PFm carries the replicas on a leading axis."""
+    def loss_all(PFm, XY, ts, epsv, t0):
+        # replicas are independent, so the sum's gradient wrt PFm[i] is exactly
+        # replica i's own gradient, and adam is elementwise: m independent runs
+        L, wmin = jax.vmap(loss_one, in_axes=(0, None, None, 0, None))(
+            PFm, XY, ts, epsv, t0)
+        return jnp.sum(L), wmin
+
+    grad_fn = jax.value_and_grad(loss_all, has_aux=True)
+
+    @jit
+    def update(PFm, opt_state, key, epsv):
+        k1, k2, k3 = random.split(key, 3)
+        XY = random.uniform(k1, (N_SLICE, N_PT, 2), minval=X_MIN, maxval=X_MAX)
+        # stratified time: one draw inside each slice's own interval
+        ts = t_slice - dt_slice * random.uniform(k2, (N_SLICE,))
+        t0 = random.uniform(k3, (), minval=T_MIN, maxval=T_MAX - NCH * TAU)
+        (loss, wmin), grads = grad_fn(PFm, XY, ts, epsv, t0)
+        updates, opt_state = optimizer.update(grads, opt_state)
+        return optax.apply_updates(PFm, updates), opt_state, loss, wmin
+
+    return update
+
+
+def _sel_grid():
+    ts = jnp.linspace(T_MIN, T_MAX, NSEL_T + 1)[1:]
+    xs = jnp.linspace(X_MIN, X_MAX, NSEL_S, endpoint=False)
+    T, Xg, Yg = jnp.meshgrid(ts, xs, xs, indexing="ij")
+    return jnp.stack([T.ravel(), Xg.ravel(), Yg.ravel()], axis=1)
+
+
+def _field_norms(PFm, unravel, G):
+    """L2 norm of each replica's symmetry-projected field on the grid G."""
+    def one(pf):
+        out = _sym_combine(_ansatz(_MODEL.apply, unravel(pf), _orbit(G)))
+        return jnp.sum(out.reshape(-1, 4, 2)[:, 0, :] ** 2)
+    return np.asarray(jax.vmap(one)(PFm))
+
+
+def _slice_state(tree, i):
+    """Keep replica i: index every leaf whose leading axis is the replica axis
+    (adam's mu/nu); scalars such as the schedule count pass through, so the
+    learning-rate schedule continues from the same global step."""
+    return jax.tree_util.tree_map(
+        lambda x: x[i:i + 1] if (hasattr(x, "ndim") and x.ndim >= 1
+                                 and x.shape[0] == M_REP) else x, tree)
+
+
+# ══════════ public contract ══════════
+
+_PREDICT_MODEL = PeriodicModifiedMLP()
+
+
+def predict_fn(params, X):
+    out = _sym_combine(_ansatz(_PREDICT_MODEL.apply, params, _orbit(X)))
+    out = out.reshape(-1, 4, 2)[:, 0, :]
+    return {"u": out[:, 0], "v": out[:, 1]}
+
+
+def train(rng, eval_callback: Callable[[Any, int, float], None] | None = None):
+    """Two phases.  Phase 1 trains M_REP replicas (independent init, shared
+    collocation batch) for S1 steps; the replica with the largest field norm is
+    kept -- reference-free, and the norm ranks rRMSE at Spearman -0.77 over 74
+    trained models.  Phase 2 trains that survivor alone to N_STEPS."""
+    key, rng_local = random.split(rng)
+    keys = random.split(key, M_REP)
+    dummy = jnp.zeros([1, INPUT_DIM])
+    _, unravel = jax.flatten_util.ravel_pytree(_MODEL.init(keys[0], dummy))
+    PF = jnp.stack([jax.flatten_util.ravel_pytree(_MODEL.init(k, dummy))[0]
+                    for k in keys])                          # [M_REP, P]
+
+    loss_one, loss_one_p, t_slice, dt_slice = _make_loss(unravel)
+    sched = optax.exponential_decay(LR0, DECAY_EVERY, DECAY)
+    optimizer = optax.adam(learning_rate=sched)
+    opt_state = optimizer.init(PF)
+    update = _make_update(loss_one, t_slice, dt_slice, optimizer)
+    epsv = jnp.full((M_REP,), EPS0)
+
+    key, rng_local = random.split(rng_local)
+    PF, opt_state, loss, wmin = update(PF, opt_state, key, epsv)
+    step_count = 1
+    last_loss = float(loss)
+    deadline = _T0 + TRAIN_TIME - SAVE_MARGIN_S
+
+    def run(PFm, opt_state, update, epsv, stop, step_count, last_loss):
+        for it in range(step_count, MAX_ITER):
+            if it % CHECK_EVERY == 0:
+                last_loss = float(loss_v[0])
+                w_now = np.asarray(wmin_v[0])
+                e = np.asarray(epsv)
+                e = np.where((w_now > W_HI) & (e < EPS_MAX), e * 3.0, e)
+                e = np.where((w_now < W_LO) & (e > EPS_MIN), e / 3.0, e)
+                epsv = jnp.asarray(e)
+                if eval_callback is not None and PFm.shape[0] == 1:
+                    eval_callback(unravel(PFm[0]), it, last_loss)
+                if time.time() > deadline or it >= stop:
+                    return PFm, opt_state, epsv, it, last_loss
+            key_l = keyholder[0]
+            key_l, sub = random.split(key_l)
+            keyholder[0] = key_l
+            PFm, opt_state, l, wm = update(PFm, opt_state, sub, epsv)
+            loss_v[0] = l
+            wmin_v[0] = wm
+        return PFm, opt_state, epsv, MAX_ITER, last_loss
+
+    keyholder = [rng_local]
+    loss_v = [loss]
+    wmin_v = [wmin]
+
+    # ---- phase 1: M_REP replicas ----
+    PF, opt_state, epsv, step_count, last_loss = run(
+        PF, opt_state, update, epsv, S1, step_count, last_loss)
+
+    # ---- select the survivor ----
+    nrm = _field_norms(PF, unravel, _sel_grid())
+    if SEL_RULE == "max":
+        i = int(np.argmax(nrm))
+    elif SEL_RULE == "min":
+        i = int(np.argmin(nrm))
+    else:
+        i = 0
+    PF = PF[i:i + 1]
+    opt_state = _slice_state(opt_state, i)
+    epsv = jnp.asarray(np.asarray(epsv)[i:i + 1])
+    wmin_v[0] = wmin_v[0][i:i + 1]   # the causal-tolerance update broadcasts
+                                     # against this, so it must be sliced too
+
+    # ---- phase 2: the survivor alone ----
+    update1 = _make_update(loss_one, t_slice, dt_slice, optimizer)
+    PF, opt_state, epsv, step_count, last_loss = run(
+        PF, opt_state, update1, epsv, S2, step_count, last_loss)
+
+    # ---- phase 2b: residual + propagator consistency ----
+    update2 = _make_update(loss_one_p, t_slice, dt_slice, optimizer)
+    PF, opt_state, epsv, step_count, last_loss = run(
+        PF, opt_state, update2, epsv, N_STEPS, step_count, last_loss)
+
+    return unravel(PF[0]), step_count

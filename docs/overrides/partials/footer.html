@@ -1,0 +1,15 @@
+{#-
+  Footer of the site after the footer of OmniKnowledge (colalab.ai/OmniKnowledge; author, 2026-11-02): a light strip
+  with the PINNSeek logo, which holds the name, on the left, linked home, and the logo of COLA Laboratory on the right,
+  linked to its site. It replaces the footer of mkdocs-material 9.7.7, whose page links (navigation.footer) the site does not use.
+-#}
+<footer class="md-footer pf-footer">
+  <div class="md-grid pf-footer__inner">
+    <a class="pf-footer__brand" href="{{ config.extra.homepage | d(nav.homepage.url, true) | url }}">
+      <img src="{{ config.theme.logo | url }}" alt="{{ config.site_name }}" width="428" height="99">
+    </a>
+    <a class="pf-footer__lab" href="https://colalab.ai/" target="_blank" rel="noopener" title="COLA Laboratory">
+      <img src="{{ 'assets/img/colalab.webp' | url }}" alt="COLA Laboratory: Computational Optimization for Learning and Adaptive Systems" width="600" height="158" loading="lazy">
+    </a>
+  </div>
+</footer>

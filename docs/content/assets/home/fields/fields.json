@@ -1,0 +1,147 @@
+{
+ "cyl": {
+  "name": "Cyl",
+  "title": "Cylinder vortex street",
+  "quantity": "vorticity",
+  "tex": "\\partial_t\\mathbf{u}+(\\mathbf{u}\\cdot\\nabla)\\mathbf{u}=-\\nabla p+\\nu\\,\\nabla^2\\mathbf{u},\\qquad\\nabla\\cdot\\mathbf{u}=0",
+  "kind": "div",
+  "frames": 31,
+  "cols": 3,
+  "rows": 11,
+  "tile": [
+   173,
+   44
+  ],
+  "size": [
+   519,
+   484
+  ],
+  "domain": [
+   0.0,
+   1.7,
+   0.0,
+   0.41
+  ],
+  "t": [
+   0.0,
+   1.2
+  ],
+  "cylinder": [
+   0.2,
+   0.2,
+   0.05
+  ]
+ },
+ "gl": {
+  "name": "GL",
+  "title": "Complex Ginzburg–Landau",
+  "quantity": "real part",
+  "tex": "\\partial_t A=\\epsilon\\,\\nabla^2 A+k\\bigl(A-(1+\\mathrm{i}c)\\,|A|^2A\\bigr)",
+  "kind": "div",
+  "frames": 80,
+  "cols": 9,
+  "rows": 9,
+  "tile": [
+   102,
+   102
+  ],
+  "size": [
+   918,
+   918
+  ],
+  "domain": [
+   -1.0,
+   0.98994975,
+   -1.0,
+   0.98994975
+  ],
+  "t": [
+   0.0,
+   0.79
+  ]
+ },
+ "gs": {
+  "name": "GS",
+  "title": "Gray–Scott reaction–diffusion",
+  "quantity": "concentration",
+  "tex": "\\partial_t u=\\epsilon_1\\nabla^2u+b_1(1-u)-c_1uv^2,\\qquad\\partial_t v=\\epsilon_2\\nabla^2v-b_2v+c_2uv^2",
+  "kind": "seq",
+  "frames": 40,
+  "cols": 6,
+  "rows": 7,
+  "tile": [
+   102,
+   102
+  ],
+  "size": [
+   612,
+   714
+  ],
+  "domain": [
+   -1.0,
+   0.989949749,
+   -1.0,
+   0.989949749
+  ],
+  "t": [
+   0.0,
+   0.78
+  ]
+ },
+ "kf": {
+  "name": "KF",
+  "title": "Kolmogorov flow",
+  "quantity": "vorticity",
+  "tex": "\\partial_t\\mathbf{u}+(\\mathbf{u}\\cdot\\nabla)\\mathbf{u}=-\\nabla p+\\nu\\,\\nabla^2\\mathbf{u}+2\\sin(4\\pi y)\\,\\mathbf{e}_x,\\qquad\\nabla\\cdot\\mathbf{u}=0",
+  "kind": "div",
+  "frames": 16,
+  "cols": 4,
+  "rows": 4,
+  "tile": [
+   130,
+   130
+  ],
+  "size": [
+   520,
+   520
+  ],
+  "domain": [
+   0.001953125,
+   0.994140625,
+   0.001953125,
+   0.994140625
+  ],
+  "t": [
+   0.0,
+   0.75
+  ]
+ },
+ "rt": {
+  "name": "RT",
+  "title": "Rayleigh–Taylor instability",
+  "quantity": "temperature",
+  "tex": "\\partial_t\\mathbf{u}+(\\mathbf{u}\\cdot\\nabla)\\mathbf{u}=-\\nabla p+\\sqrt{\\mathrm{Pr}/\\mathrm{Ra}}\\,\\nabla^2\\mathbf{u}+T\\,\\mathbf{e}_y,\\qquad\\partial_tT+\\mathbf{u}\\cdot\\nabla T=\\frac{\\nabla^2T}{\\sqrt{\\mathrm{Pr}\\,\\mathrm{Ra}}}",
+  "kind": "seq",
+  "frames": 20,
+  "cols": 6,
+  "rows": 4,
+  "tile": [
+   102,
+   202
+  ],
+  "size": [
+   612,
+   808
+  ],
+  "domain": [
+   0.0,
+   1.0,
+   0.0,
+   2.0
+  ],
+  "t": [
+   0.0,
+   4.75
+  ]
+ }
+}

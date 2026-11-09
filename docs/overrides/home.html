@@ -1,0 +1,379 @@
+{#- Landing page of the PINNSeek website. Every number on it is taken from the paper
+    (Results, Introduction and Table 1); the chart and gallery data come from partials/pf_*.html,
+    which docs are generated from the paper's data. Styles: assets/home/home.css. -#}
+{% extends "main.html" %}
+
+{% block htmltitle %}<title>PINNSeek: autonomous discovery of PINN solvers</title>{% endblock %}
+
+{% block extrahead %}
+  {{ super() }}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="{{ 'assets/css/pf.css' | url }}">
+  <link rel="stylesheet" href="{{ 'assets/home/home.css' | url }}">
+  <script defer src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js" integrity="sha384-Mx5lkUEQPM1pOJCwFtUICyX45KNojXbkWdYhkKUKsbv391mavbfoAmONbzkgYPzR" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+  <script defer src="{{ 'assets/js/pf.js' | url }}"></script>
+  <script defer src="{{ 'assets/home/home.js' | url }}"></script>
+  <script defer src="{{ 'assets/home/herofield.js' | url }}"></script>
+  <script defer src="{{ 'assets/home/ka.js' | url }}"></script>
+  <script defer src="{{ 'assets/home/results.js' | url }}"></script>
+  <script defer src="{{ 'assets/home/ring.js' | url }}"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" integrity="sha384-nB0miv6/jRmo5UMMR1wu3Gz6NLsoTkbqJghGIsx//Rlm+ZU03BU6SQNC66uf4l5+" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" integrity="sha384-7zkQWkzuo3B5mTepMUcHkMB5jZaolc2xDwL6VFqjFALcbeS9Ggm/Yr2r3Dy4lfFg" crossorigin="anonymous"></script>
+{% endblock %}
+
+{% block tabs %}
+{{ super() }}
+<div class="pfh">
+
+<!-- ============================================================ hero -->
+<section class="pfh-hero">
+  <div class="pfh-wrap pfh-hero-grid">
+    <div class="pfh-hero-copy">
+      <h1>Discover accurate and efficient <span class="pfh-ember">PINN solvers</span>, autonomously</h1>
+      <p class="pfh-lede">We present PINNSeek, a knowledge-centric agent system for the autonomous discovery of physics-informed neural network (PINN) solvers. PINNSeek pairs two knowledge bases, a literature base of human-verified notes on published PINN methods and an experience base that accumulates retrospective evidence, with a coding agent that has agency over their use.</p>
+      <div class="pfh-actions">
+        <a class="pfh-btn pfh-btn-primary" href="{{ config.extra.apply_url }}" target="_blank" rel="noopener">Apply for a trial</a>
+      </div>
+    </div>
+    <figure class="pfh-hero-pinn" id="hero-field" data-base="{{ 'assets/home/fields/' | url }}" data-pages="{{ 'problems/' | url }}">
+      <p class="pfh-pinn-k">Predicted by a discovered PINN solver</p>
+      <!-- the predictions of five discovered solvers as a marble in ink, the equation under the cursor below it (herofield.js);
+           the video of Cyl and its equations without WebGL 2 -->
+      <div class="pfh-hf-art"><canvas role="img" aria-label="The predictions of the discovered PINN solvers of Cyl, GL, KF, GS and RT, drawn together as marbled ink"></canvas>
+        <div class="pfh-hf-eqs" aria-hidden="true"></div></div>
+      <div class="pfh-pinn-media" tabindex="0" aria-describedby="pinn-info">
+        <video muted loop playsinline preload="none" poster="{{ 'assets/home/cyl_pinn_poster.webp' | url }}" width="962" height="248">
+          <source src="{{ 'assets/home/cyl_pinn.mp4' | url }}" type="video/mp4"></video>
+        <div class="pfh-pinn-info" id="pinn-info">
+          <b>Cyl: flow past a cylinder</b>
+          <span>Vorticity of the flow behind the cylinder, <i>t</i> from 0 to 1.2, <i>&nu;</i> = 10<sup>&minus;3</sup>, from the cylinder to <i>x</i> = 1.6</span>
+          <span>Predicted by the best solver of the Cyl discovery run, found in round 8</span>
+        </div>
+      </div>
+      <div class="pfh-math pfh-pinn-eq" data-tex="\begin{aligned}\frac{\partial u}{\partial t}+u\frac{\partial u}{\partial x}+v\frac{\partial u}{\partial y}&amp;=-\frac{\partial p}{\partial x}+\nu\left(\frac{\partial^{2} u}{\partial x^{2}}+\frac{\partial^{2} u}{\partial y^{2}}\right)\\ \frac{\partial v}{\partial t}+u\frac{\partial v}{\partial x}+v\frac{\partial v}{\partial y}&amp;=-\frac{\partial p}{\partial y}+\nu\left(\frac{\partial^{2} v}{\partial x^{2}}+\frac{\partial^{2} v}{\partial y^{2}}\right)\\ \frac{\partial u}{\partial x}+\frac{\partial v}{\partial y}&amp;=0\end{aligned}"></div>
+    </figure>
+  </div>
+  <div class="pfh-wrap">
+    <dl class="pfh-stats">
+      <div><dt><a class="pfh-stat-a" href="#results"><span class="pfh-stat-k">Superiority</span>18 / 18</a></dt><dd>problems on which the discovered solver has the lowest mean error of five methods</dd></div>
+      <div><dt><a class="pfh-stat-a" href="#results"><span class="pfh-stat-k">Accuracy</span>16 / 18</a></dt><dd>problems with a mean relative <i>L</i><sup>2</sup> error below 0.1</dd></div>
+      <div><dt><a class="pfh-stat-a" href="#results"><span class="pfh-stat-k">Efficiency</span>60&ndash;480 s</a></dt><dd>training time per solver, equal for every method</dd></div>
+      <div><dt><a class="pfh-stat-a" href="#generalization"><span class="pfh-stat-k">Generalization</span>23 / 30</a></dt><dd>new cases with a mean error below 0.02, retrained from scratch</dd></div>
+    </dl>
+  </div>
+</section>
+
+<!-- ============================================================ knowledge and agency -->
+<section class="pfh-section pfh-tint" id="knowledge-and-agency">
+  <div class="pfh-wrap">
+    <p class="pfh-overline">How it works</p>
+    <header class="pfh-head">
+      <h2>Knowledge and agency</h2>
+      <p class="pfh-ka-lede pfh-ka-parts"><b>Literature base</b><i aria-hidden="true">+</i><b>Experience base</b><i aria-hidden="true">+</i><b>Agent harness</b></p>
+    </header>
+    {% include "partials/pf_how.html" %}
+
+    <div class="pfh-ka-stage">
+      <div class="pfh-ka-grid">
+        <svg id="ka-loop" viewBox="24 50 1350 688" role="img" aria-label="The discovery loop of PINNSeek on the Kolmogorov flow: the coding agent reads the task, the literature base and the experience base, evaluates candidates through the evaluation tool and the score service, and writes a summary into the experience base"></svg>
+        <div class="pfh-ka-mwin ka-hit" data-panel="ke" tabindex="0" role="button" aria-label="Summaries of the experience base: details">
+            <p class="pfh-ka-st">Summaries <span>last 3</span></p>
+            <ol class="pfh-ka-log" id="ka-log"></ol>
+          </div>
+        <div class="pfh-ka-field ka-hit" data-panel="field" tabindex="0" role="button" aria-label="Incumbent field: the problem and its equations">
+            <p class="pfh-ka-st">Incumbent field</p>
+            <p class="pfh-ka-ss">Kolmogorov flow, <i>&omega;</i> at <i>t</i> = 0.75</p>
+            <div class="pfh-ka-img"><img id="ka-fimg" alt="Vorticity of the incumbent solver at t = 0.75" width="384" height="384"></div>
+            <div class="pfh-ka-cbar"><i></i><span id="ka-vmin"></span><span>0</span><span id="ka-vmax"></span></div>
+          </div>
+      </div>
+      <div class="pfh-ka-ctl">
+        <div class="pfh-ka-ctl-left"><button type="button" class="pfh-ka-btn" id="ka-restart" aria-label="Play from the start" title="Play from the start"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h2v11H3zM13.5 2.5v11L6 8z"/></svg></button>
+        <button type="button" class="pfh-ka-btn" id="ka-play" aria-label="Pause" title="Play or pause"><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5h3v11H4zM9 2.5h3v11H9z"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.5v11L13.5 8z"/></svg></button>
+        <div class="pfh-ka-speed" role="group" aria-label="Playback speed"><button type="button" data-speed="0.5" aria-pressed="false">0.5&times;</button><button type="button" data-speed="1" class="on" aria-pressed="true">1&times;</button><button type="button" data-speed="2" aria-pressed="false">2&times;</button></div>
+          <details class="pfh-ka-dl" id="ka-dl"><summary class="pfh-ka-btn" aria-label="Download the loop as a video or a GIF" title="Download"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7 1.5h2v6.6l2.4-2.4 1.4 1.4L8 11.9 3.2 7.1l1.4-1.4L7 8.1zM2.5 13h11v1.8h-11z"/></svg></summary>
+          <div class="pfh-ka-dl-menu"><a href="{{ 'assets/home/pinnseek-discovery-loop.mp4' | url }}" download="pinnseek-discovery-loop.mp4"><b>MP4</b><span>1920 &times; 1002 &middot; 1.4 MB</span></a><a href="{{ 'assets/home/pinnseek-discovery-loop.gif' | url }}" download="pinnseek-discovery-loop.gif"><b>GIF</b><span>1440 &times; 752 &middot; 6.7 MB</span></a></div></details></div>
+          {#- sizes as written by website/tools/loop_gif.py (2026-10-27); update them when the loop is recorded again #}
+        <div class="pfh-ka-track"><input type="range" id="ka-seek" min="2600" max="28600" step="10" value="2600" aria-label="Position in the discovery run"><div class="pfh-ka-ticks" id="ka-ticks" aria-hidden="true"></div></div>
+        <span class="pfh-ka-time" id="ka-time">round 1/10</span>
+      </div>
+      <div class="pfh-ka-panel" id="ka-panel" hidden role="region" aria-labelledby="ka-panel-title">
+        <button type="button" class="pfh-ka-close" aria-label="Close the details">&times;</button>
+        <div class="pfh-ka-panel-body" id="ka-panel-body"></div>
+      </div>
+    </div>
+    <p class="pfh-ka-hint">Click any part of the loop for its details.</p>
+
+    <template id="ka-tpl-task">
+      <p class="kp-kicker">Task package</p><h3 id="ka-panel-title">What the agent is given</h3>
+      <div class="pfh-math" data-tex="\mathcal{T}=(D,\,s_0,\,Z,\,E)"></div>
+      <dl class="kp-dl">
+        <div><dt>D</dt><dd>The description: the equations, the domain, the boundary and initial conditions, the scoring, the software environment and the training time, in seven fixed sections.</dd></div>
+        <div><dt>s<sub>0</sub></dt><dd>The standard PINN, a runnable program whose header fixes the constants of the problem and the training time &tau;.</dd></div>
+        <div><dt>Z</dt><dd>The public files: initial fields, coefficient grids, geometries and the points at which predictions are made.</dd></div>
+        <div><dt>E</dt><dd>The evaluation tool, the only path to full training.</dd></div>
+      </dl>
+      <p>The reference solution is not part of the task package. Before a run starts, the package passes automatic checks of its structure, an end-to-end rehearsal on the CPU and a measurement of <i>s</i><sub>0</sub>.</p>
+      <p class="kp-sub">In the run shown: KF, the Kolmogorov flow</p>
+      <dl class="kp-dl kp-ex">
+        <div><dt>Equation</dt><dd>2D unsteady incompressible Navier&ndash;Stokes with the forcing 2&thinsp;sin(4&pi;<i>y</i>), <i>Re</i> = 2000</dd></div>
+        <div><dt>Domain</dt><dd><i>t</i> &isin; [0, 0.75] on the unit square, periodic in <i>x</i> and <i>y</i></dd></div>
+        <div><dt>Scoring</dt><dd>relative <i>L</i><sup>2</sup> error of the velocity (<i>u</i>, <i>v</i>) on 16 snapshots of a 128 &times; 128 grid</dd></div>
+        <div><dt>Time</dt><dd>300 s of training per candidate</dd></div>
+      </dl>
+    </template>
+
+    <template id="ka-tpl-field">
+      <p class="kp-kicker">Incumbent field</p><h3 id="ka-panel-title">KF: the Kolmogorov flow</h3>
+      <p>The unsteady incompressible Navier&ndash;Stokes equations with the Kolmogorov forcing 2&thinsp;sin(4&pi;<i>y</i>) on the <i>x</i>-momentum, on the unit square with periodic boundaries.</p>
+      <div class="pfh-math" data-tex="\begin{aligned}u_t+u\,u_x+v\,u_y&=-p_x+\nu\,(u_{xx}+u_{yy})+2\sin(4\pi y)\\v_t+u\,v_x+v\,v_y&=-p_y+\nu\,(v_{xx}+v_{yy})\\u_x+v_y&=0\end{aligned}"></div>
+      <dl class="kp-dl kp-ex">
+        <div><dt>Viscosity</dt><dd><i>&nu;</i> = 1/<i>Re</i>, <i>Re</i> = 2000</dd></div>
+        <div><dt>Domain</dt><dd>(<i>t</i>, <i>x</i>, <i>y</i>) &isin; [0, 0.75] &times; [0, 1]<sup>2</sup>, periodic in <i>x</i> and <i>y</i> for <i>u</i>, <i>v</i>, <i>p</i> and all their derivatives</dd></div>
+        <div><dt>Initial</dt><dd>the reference velocity at <i>t</i> = 0 on a uniform 256 &times; 256 grid</dd></div>
+        <div><dt>Scoring</dt><dd>relative <i>L</i><sup>2</sup> error of (<i>u</i>, <i>v</i>) at the 16 times <i>t</i> = 0, 0.05, &hellip;, 0.75 on a 128 &times; 128 subsample of that grid</dd></div>
+        <div><dt>Time</dt><dd>300 s of training per candidate</dd></div>
+      </dl>
+      <p>The field shows the vorticity <span class="pfh-math-i" data-tex="\omega=v_x-u_y"></span> of the incumbent at <i>t</i> = 0.75, the last time of the problem. The problem and its reference solution follow APTS. A pseudo-spectral solution from the same initial velocity differs from the reference by a relative error of 0.016.</p>
+      <p class="kp-more"><a href="{{ 'problems/kf.html' | url }}">The problem page of KF &rarr;</a></p>
+    </template>
+
+    <template id="ka-tpl-agent">
+      <p class="kp-kicker">Coding agent</p><h3 id="ka-panel-title">Agency: the policy decides</h3>
+      <div class="pfh-math" data-tex="a_t\sim\pi(\,\cdot\mid\chi,h_t)"></div>
+      <p>Each round starts a new coding agent that follows the charter &chi; with a GPU budget <i>b</i>. A round inherits nothing from earlier rounds except the files of the run. PINNSeek fixes the task, the literature base, the charter, the budget, the actions available to the agent and the order of the rounds. The policy decides everything else:</p>
+      <ul class="kp-ul">
+        <li>the parent of the round, which may be any earlier candidate rather than the incumbent;</li>
+        <li>the notes it reads, and the earlier summaries and programs it consults;</li>
+        <li>what each candidate changes, from one hyperparameter to the whole solver;</li>
+        <li>the number, order and seeds of the evaluations, and the share of the budget spent on diagnostics;</li>
+        <li>what the summary of the round passes on to later rounds.</li>
+      </ul>
+      <p class="kp-sub">The agent harness around it</p>
+      <p>A discovery runs without human intervention. The agent harness supervises the rounds:</p>
+      <ul class="kp-ul">
+        <li>The orchestrator is a deterministic program rather than a language model, since whether a round is finished is a question that the record of the run answers.</li>
+        <li>For each round it checks that the GPUs respond, starts the coding agent with a fixed prompt and waits for it to exit. If the round is incomplete, it resumes the same session, at most six times.</li>
+        <li>Before each round it hashes every file that the round must leave unchanged, and checks the hashes after the agent exits. The ledger of the current round may only grow.</li>
+        <li>Every check is stored, and an audit of a run lists any violation.</li>
+      </ul>
+      <p class="kp-note">The runs of the paper use Claude Code with Claude Opus 4.8.</p>
+    </template>
+
+    <template id="ka-tpl-eval">
+      <p class="kp-kicker">Evaluation tool</p><h3 id="ka-panel-title">Three kinds of evaluation</h3>
+      <dl class="kp-dl">
+        <div><dt>full</dt><dd>Trains a candidate with a seed on one GPU for the training time &tau; and returns its error.</dd></div>
+        <div><dt>smoke</dt><dd>Trains a candidate on the CPU for 10 s and returns the error of the field it produces, at no GPU cost.</dd></div>
+        <div><dt>diag</dt><dd>Runs a program of the agent on one GPU for at most &tau; and returns its output, without an error.</dd></div>
+      </dl>
+      <p>Full evaluations and diagnostics are charged their wall time, failed runs included, within the GPU budget of the round:</p>
+      <div class="pfh-math" data-tex="\sum_{\ell\in\mathcal{L}_r,\ \kappa(\ell)\ne\mathrm{smoke}} w(\ell)\;\le\;b"></div>
+      <p>Before a full evaluation the tool checks that the candidate keeps the training time fixed by the standard PINN and reserves &tau; of the budget under a file lock. It trains the candidate in a child process that sees one GPU and stops it at &tau;.</p>
+    </template>
+
+    <template id="ka-tpl-score">
+      <p class="kp-kicker">Score service</p><h3 id="ka-panel-title">The only reader of the reference</h3>
+      <div class="pfh-math" data-tex="\varepsilon(s,\xi)=\frac{\lVert u_{\theta_s(\xi)}(X)-u^{\mathrm{ref}}(X)\rVert_2}{\lVert u^{\mathrm{ref}}(X)\rVert_2}"></div>
+      <ul class="kp-ul">
+        <li>A separate process, and the only component that reads the reference solution.</li>
+        <li>Computes the error with the metric of the task, taken from the task library rather than from the copy that the agent can edit.</li>
+        <li>Never executes code of the agent, so the reference can be kept where the processes of the agent cannot read it.</li>
+        <li>Scores at most 256 requests per round, so it cannot serve as an unlimited oracle, and keeps its own ledger.</li>
+      </ul>
+    </template>
+
+    <template id="ka-tpl-inc">
+      <p class="kp-kicker">Incumbent</p><h3 id="ka-panel-title">The best solver so far</h3>
+      <div class="pfh-math" data-tex="s^{\star}_r=\operatorname*{arg\,min}_{\ell\in\mathcal{L}_{\le r},\ \kappa(\ell)=\mathrm{full}}\ \varepsilon(\ell)"></div>
+      <p>After every round, the incumbent is the candidate with the lowest error among the full evaluations so far, and the run returns the incumbent of its last round as its discovered solver.</p>
+      <p>In the run shown, the standard PINN of round 0 has an error of 1.06. Round 1 lowers it to 0.840, round 2 to 0.131, and round 6 sets the incumbent at 0.0149, which the later rounds do not improve. The field beside the loop is the vorticity of the incumbent at the last time.</p>
+    </template>
+
+    <template id="ka-tpl-conv">
+      <p class="kp-kicker">Convergence curve</p><h3 id="ka-panel-title">Every evaluation of the run</h3>
+      <p>Each dot is one full evaluation of a candidate, placed in the round that made it, and the line is the lowest error found so far. A discovery affords evaluations in the order of 10<sup>2</sup>; the run shown makes 235 over its eleven rounds.</p>
+      <p>The error falls in a few large steps, each when a technique enters the solver: a separable network with causal weighting, a weak residual on Fourier modes, a trial space equal to the test space and time marching with exact restarts.</p>
+    </template>
+
+    <template id="ka-tpl-ke">
+      <p class="kp-kicker">Experience base</p><h3 id="ka-panel-title">The memory of the discovery</h3>
+      <div class="pfh-math" data-tex="\mathcal{K}_E^{(r)}=\mathcal{K}_E^{(r-1)}\cup\{m_r\},\qquad m_r=(\delta_r,\,T_r,\,F_r)"></div>
+      <dl class="kp-dl">
+        <div><dt>&delta;<sub>r</sub></dt><dd>The direction: the parent from which the round starts and the reasons for its line of attack.</dd></div>
+        <div><dt>T<sub>r</sub></dt><dd>The table of every evaluation of the round, with the change of its candidate, its error and its number of steps.</dd></div>
+        <div><dt>F<sub>r</sub></dt><dd>The findings: what works, what fails and why, and what later rounds should drop or pursue.</dd></div>
+      </dl>
+      <p>With the summaries, every round keeps its artifacts, the candidate programs and their evaluation records, which later rounds read and build on. The summaries of the run shown:</p>
+    </template>
+
+    <div class="pfh-ka-eqs">
+      <article class="pfh-ka-eq" tabindex="0" aria-describedby="ka-eq-pop-1">
+        <p class="pfh-ka-tag">The problem</p>
+        <div class="pfh-math" data-tex="s^{\star}\in\operatorname*{arg\,min}_{s\in\mathcal{S}(\mathcal{T})}\ \mathbb{E}_{\xi}\bigl[\varepsilon(s,\xi)\bigr]"></div>
+        <p>Find the PINN solver with the lowest expected error for the task, under a total GPU budget <i>B</i>.</p>
+        <div class="pfh-ka-pop" id="ka-eq-pop-1" role="tooltip">
+          <dl>
+            <dt><span class="pfh-math-i" data-tex="s"></span></dt><dd>A candidate solver, a program that defines a training function and a prediction function.</dd>
+            <dt><span class="pfh-math-i" data-tex="\mathcal{S}(\mathcal{T})"></span></dt><dd>The admissible set of the task, the programs that solve the problem as a PINN with derivatives by automatic differentiation, keep the interface of the standard PINN and read no data beyond the public files.</dd>
+            <dt><span class="pfh-math-i" data-tex="\xi,\ \mathbb{E}_{\xi}"></span></dt><dd>The seed of the training, and the expectation over seeds.</dd>
+            <dt><span class="pfh-math-i" data-tex="\varepsilon(s,\xi)"></span></dt><dd>The relative <i>L</i><sup>2</sup> error at the scoring points, against a reference solution that the agent never reads.</dd>
+          </dl>
+          <p>Every evaluation trains a candidate on one GPU for the training time &tau; of the problem, 60 to 480 s. A budget <i>B</i> of 5 to 20 GPU hours affords evaluations in the order of 10<sup>2</sup>.</p>
+          <p>A solver is a whole program, so the design space includes the network, the loss, the sampling, the optimizer, the training schedule and the way the constraints are imposed.</p>
+        </div>
+      </article>
+      <article class="pfh-ka-eq" tabindex="0" aria-describedby="ka-eq-pop-2">
+        <p class="pfh-ka-tag pfh-tag-k">Knowledge</p>
+        <div class="pfh-math" data-tex="\mathcal{K}_E^{(r)}=\mathcal{K}_E^{(r-1)}\cup\{m_r\},\quad m_r=(\delta_r,T_r,F_r)"></div>
+        <p>A literature base <span class="pfh-math-i" data-tex="\mathcal{K}_L"></span> of 130 human-verified notes, and an experience base <span class="pfh-math-i" data-tex="\mathcal{K}_E"></span> that accumulates retrospective evidence.</p>
+        <div class="pfh-ka-pop" id="ka-eq-pop-2" role="tooltip">
+          <dl>
+            <dt><span class="pfh-math-i" data-tex="\mathcal{K}_L"></span></dt><dd>The literature base, one note per paper on PINN methods from 2019 to 2026. A note gives the mechanism, the failure of training it addresses, an implementation in JAX and the reported results.</dd>
+            <dt><span class="pfh-math-i" data-tex="\mathcal{K}_E^{(r)}"></span></dt><dd>The experience base after round <i>r</i>, the summaries of all rounds so far.</dd>
+            <dt><span class="pfh-math-i" data-tex="\delta_r"></span></dt><dd>The direction, the parent from which round <i>r</i> starts and the reasons for its line of attack.</dd>
+            <dt><span class="pfh-math-i" data-tex="T_r"></span></dt><dd>The table of every evaluation of the round, with the change of its candidate, its error and its number of steps.</dd>
+            <dt><span class="pfh-math-i" data-tex="F_r"></span></dt><dd>The findings, what works, what fails and why, and what later rounds should drop or pursue.</dd>
+          </dl>
+          <p>Each round starts a new agent that inherits nothing but the files of the run, so the experience base is the memory of the discovery. Its errors come only from the evaluation tool, and its summaries cite the notes by their identifiers.</p>
+        </div>
+      </article>
+      <article class="pfh-ka-eq" tabindex="0" aria-describedby="ka-eq-pop-3">
+        <p class="pfh-ka-tag pfh-tag-a">Agency</p>
+        <div class="pfh-math" data-tex="(\mathcal{C}_r,\mathcal{L}_r,m_r)=\mathcal{A}_\chi\bigl(\mathcal{T},\mathcal{K}_L,\mathcal{K}_E^{(r-1)},\mathcal{C}_{<r},\mathcal{L}_{<r};\,b\bigr)"></div>
+        <p>The coding agent chooses the parent, the notes it reads, what each candidate changes and how it is evaluated.</p>
+        <div class="pfh-ka-pop" id="ka-eq-pop-3" role="tooltip">
+          <dl>
+            <dt><span class="pfh-math-i" data-tex="\mathcal{A}_\chi"></span></dt><dd>The coding agent of the round, which follows the charter &chi;.</dd>
+            <dt><span class="pfh-math-i" data-tex="\mathcal{T},\,\mathcal{K}_L,\,\mathcal{K}_E^{(r-1)}"></span></dt><dd>The task, the literature base and the experience base before the round.</dd>
+            <dt><span class="pfh-math-i" data-tex="\mathcal{C}_{<r},\,\mathcal{L}_{<r}"></span></dt><dd>The candidate programs and the ledger of evaluation records of the earlier rounds.</dd>
+            <dt><span class="pfh-math-i" data-tex="b"></span></dt><dd>The GPU budget of the round.</dd>
+            <dt><span class="pfh-math-i" data-tex="\mathcal{C}_r,\,\mathcal{L}_r,\,m_r"></span></dt><dd>What the round returns, its candidates, their evaluation records and its summary.</dd>
+          </dl>
+          <p>PINNSeek fixes the inputs, the charter, the budget and the order of the rounds. The policy of the agent decides everything else, the parent, which may be any earlier candidate, the notes it reads, what each candidate changes, from one hyperparameter to the whole solver, and the number, order and seeds of the evaluations.</p>
+          <p>A fixed search strategy, such as FunSearch, AlphaEvolve or ERA, instead selects the parent by a rule set in advance and fills a fixed prompt template.</p>
+        </div>
+      </article>
+    </div>
+
+    <div class="pfh-ka-proof">
+      <div class="pfh-ka-proof-head">
+        <p class="pfh-ka-tag">What each part contributes</p>
+        <p>Final error on <a class="pfh-prob" href="{{ 'problems/ldc.html' | url }}">LDC</a> at the same GPU budget, geometric mean of the runs. Without the literature base or agency, the error rises by an order of magnitude.</p>
+      </div>
+      <div class="pfh-bars" id="ka-bars">
+        <div class="pfh-bar pfh-bar-main" data-v="0.015"><span>PINNSeek</span><i></i><b>0.015</b></div>
+        <div class="pfh-bar" data-v="0.17"><span>A single round with the whole budget</span><i></i><b>0.17</b></div>
+        <div class="pfh-bar" data-v="0.20"><span>Without the literature base</span><i></i><b>0.20</b></div>
+        <div class="pfh-bar" data-v="0.44"><span><a class="pfh-ref" href="https://code.claude.com/docs/en/overview" title="Claude Code, Anthropic" target="_blank" rel="noopener noreferrer">Claude Code with web search</a></span><i></i><b>0.44</b></div>
+        <div class="pfh-bar" data-v="0.66"><span><a class="pfh-ref" href="https://doi.org/10.1038/s41586-026-10658-6" title="Ayg&uuml;n et al. An AI system to help scientists write expert-level empirical software. Nature 654, 909&ndash;916 (2026)" target="_blank" rel="noopener noreferrer">Tree search of ERA</a></span><i></i><b>0.66</b></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============================================================ benchmark gallery -->
+<section class="pfh-section" id="benchmark">
+  <div class="pfh-wrap pfh-has-grid">
+    <p class="pfh-overline">Results</p>
+    <a class="pfh-grid-btn" href="{{ 'problems.html' | url }}" title="All 18 problems as a grid" aria-label="All 18 problems as a grid"><svg viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="1" width="4.4" height="4.4" rx="1"/><rect x="6.8" y="1" width="4.4" height="4.4" rx="1"/><rect x="12.6" y="1" width="4.4" height="4.4" rx="1"/><rect x="1" y="6.8" width="4.4" height="4.4" rx="1"/><rect x="6.8" y="6.8" width="4.4" height="4.4" rx="1"/><rect x="12.6" y="6.8" width="4.4" height="4.4" rx="1"/><rect x="1" y="12.6" width="4.4" height="4.4" rx="1"/><rect x="6.8" y="12.6" width="4.4" height="4.4" rx="1"/><rect x="12.6" y="12.6" width="4.4" height="4.4" rx="1"/></svg></a>
+    <header class="pfh-head">
+      <h2>18 challenging PDE problems</h2>
+      <p>Steady and unsteady problems in one to three dimensions, covering elliptic and diffusion equations, shocks and waves, incompressible flows, buoyancy-driven and chaotic dynamics, pattern formation and wildfire smoke transport.</p>
+    </header>
+    <div class="pfh-cases">
+      {% include "partials/pf_gallery.html" %}
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ results -->
+<section class="pfh-section pfh-tint" id="results">
+  <div class="pfh-wrap">
+    <p class="pfh-overline">Deep dive</p>
+    <header class="pfh-head">
+      <p class="pfh-kicker">Superiority &middot; Accuracy &middot; Efficiency</p>
+      <h2>More accurate than PINN solvers designed by human experts</h2>
+      <p>The discovered solvers and Scale-PINN, APTS, SPINN and DSGNAR are each trained with five seeds on one NVIDIA RTX A6000 GPU, for the same time per problem, 60 to 480 s.</p>
+    </header>
+    <div class="pfh-card pf">
+      {% include "partials/pf_overview.html" %}
+      <p class="pfh-note">Ratio: the mean error of the best of the four methods over that of the discovered solver.</p>
+    </div>
+
+    <div class="pfh-result" id="generalization">
+      <div class="pfh-result-copy">
+        <p class="pfh-kicker">Generalization</p>
+        <h3>Solvers carry over to new cases without redesign</h3>
+        <p>Applied to 30 new cases of LDC, BFS, NACA, KF and KS, with other Reynolds numbers, angles of attack, initial conditions and domain lengths and a second airfoil, the solvers retrained from scratch reach a mean error below 0.02 on 23 cases and below 0.05 on 27. <a class="pfh-quiet" href="https://arxiv.org/abs/2602.19475" title="Chiu et al. Scale-PINN: Learning Efficient Physics-Informed Neural Networks through Sequential Correction. arXiv:2602.19475 (2026)" target="_blank" rel="noopener noreferrer">Scale-PINN</a>, trained for the same time, has a higher error on 28 of the 30 (one-sided Mann&ndash;Whitney test, <i>p</i> &le; 0.05).</p>
+        <p>One more discovery round on a new case lowers the error on 15 of the 30 cases.</p>
+      </div>
+      <div class="pfh-fig" id="fig-gen" data-res="{{ 'assets/home/res/' | url }}"><img src="{{ 'assets/home/fig2.webp' | url }}" alt="Discovered PINN solvers on new cases of five problems" loading="lazy"></div>
+    </div>
+
+    <div class="pfh-result pfh-result-flip">
+      <div class="pfh-result-copy">
+        <p class="pfh-kicker">Applications</p>
+        <h3>Atmospheric transport and fluid dynamics</h3>
+        <p>Smoke transport from the 2023 wildfires in Quebec with reanalysis winds and fire emissions, the vortex street behind a cylinder in the DFG 2D-3 benchmark, and the three-dimensional flow over the ONERA M6 wing.</p>
+        <ul class="pfh-apps">
+          <li><a href="{{ 'problems/smoke.html' | url }}">Smoke</a><b>0.064</b><span>in 180 s, against 0.32</span></li>
+          <li><a href="{{ 'problems/cyl.html' | url }}">Cyl</a><b>0.023</b><span>in 300 s, against 0.48</span></li>
+          <li><a href="{{ 'problems/wing3d.html' | url }}">Wing3D</a><b>0.032</b><span>in 480 s, against 0.047</span></li>
+        </ul>
+        <p class="pfh-small">Mean error over five seeds, against the best of the four state-of-the-art methods.</p>
+      </div>
+      <div class="pfh-fig" id="fig-apps" data-res="{{ 'assets/home/res/' | url }}"><img src="{{ 'assets/home/fig3.webp' | url }}" alt="Discovered PINN solvers on three applications" loading="lazy"></div>
+    </div>
+
+    <div class="pfh-result">
+      <div class="pfh-result-copy">
+        <p class="pfh-kicker">Inside a discovery</p>
+        <h3>The agent builds on literature knowledge and on its own experience</h3>
+        <p>Across three runs each on LDC and KS, the largest advances come when a technique enters the solver. Of the 44 components of the six final solvers, 17 are taken from the literature base unchanged, 13 are adapted from it and 14 do not come from it.</p>
+        <p>The experience base accumulates what each round finds, and the agent revises it as the solver changes.</p>
+        <p>Independent agents reach similar accuracy along different paths.</p>
+      </div>
+      <div class="pfh-fig" id="fig-disc" data-res="{{ 'assets/home/res/' | url }}"><img src="{{ 'assets/home/fig4.webp' | url }}" alt="Discovery process of the PINN solvers for LDC and KS" loading="lazy"></div>
+    </div>
+
+    <div class="pfh-result pfh-result-flip">
+      <div class="pfh-result-copy">
+        <p class="pfh-kicker">Ablations</p>
+        <h3>Knowledge and agency drive the accuracy</h3>
+        <p>Under the same agent model, task and GPU budget, runs without the literature base end at a geometric mean error of 0.20 on LDC, against 0.015 for PINNSeek. A single round with the whole budget ends at 0.17, the tree search of ERA at 0.66 and Claude Code with web search at 0.44.</p>
+      </div>
+      <div class="pfh-fig" id="fig-abl" data-res="{{ 'assets/home/res/' | url }}"><img src="{{ 'assets/home/fig5.webp' | url }}" alt="Knowledge and agency as the drivers of discovery on LDC and KS" loading="lazy"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ paper -->
+<section class="pfh-section" id="paper">
+  <div class="pfh-wrap">
+    <p class="pfh-overline">Research behind PINNSeek</p>
+    <header class="pfh-head">
+      <h2>Knowledge-centric agent system for autonomous discovery of physics-informed neural network solvers</h2>
+      <p class="pfh-authors">Jiangtao Shen, Ke Li</p>
+      <p>Manuscript under review.</p>
+    </header>
+  </div>
+</section>
+
+<!-- back to top: Material's button lives in the main column, which the landing hides (home.js shows this one) -->
+<button type="button" class="pfh-top" aria-label="Back to top" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"/></svg>Back to top</button>
+</div>
+<div class="pf">
+  <div class="lightbox" id="lightbox" role="dialog" aria-label="Enlarged figure"><img alt=""></div>
+  <dialog class="viewer" id="viewer" aria-label="File viewer"><div class="viewer-head"><div class="viewer-title"></div>
+  <div class="viewer-actions"><button type="button" class="viewer-copy">Copy</button><button type="button" class="viewer-close" aria-label="Close">&times;</button></div></div>
+  <div class="viewer-meta"></div><pre class="viewer-body"><code></code></pre></dialog>
+</div>
+{% endblock %}
+
+{% block content %}{% endblock %}
