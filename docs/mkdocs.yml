@@ -28,6 +28,9 @@ theme:
     - toc.follow
 extra_css:
   - assets/css/theme.css
+# a service worker of this site's scope, which keeps the one of colalab.ai from failing its videos (content/sw.js)
+extra_javascript:
+  - assets/js/sw-register.js
 extra:
   # the trial application: a Google Form without sign-in or uploads (step 1; the data follow through a link sent to
   # accepted applicants); created by website/tools/trial_form.gs, its link opens from the header and the home page
