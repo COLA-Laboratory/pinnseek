@@ -1,4 +1,5 @@
-/* PINNSeek review site: equations, charts and the figure lightbox. No tracking, no storage. */
+/* PINNSeek review site: equations, charts and the figure lightbox. No storage; visits are counted by GoatCounter,
+   without cookies (overrides/partials/integrations/analytics/goatcounter.html). */
 (function () {
   "use strict";
 

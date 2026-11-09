@@ -32,6 +32,11 @@ extra_css:
 extra_javascript:
   - assets/js/sw-register.js
 extra:
+  # visits counted by GoatCounter (dashboard https://shenjiangtao.goatcounter.com), the total shown in the footer
+  # (overrides/partials/integrations/analytics/goatcounter.html, partials/footer.html)
+  analytics:
+    provider: goatcounter
+    code: shenjiangtao
   # the trial application: a Google Form without sign-in or uploads (step 1; the data follow through a link sent to
   # accepted applicants); created by website/tools/trial_form.gs, its link opens from the header and the home page
   apply_url: https://docs.google.com/forms/d/e/1FAIpQLScytQKrKLZ1v94h-mEccmfmPIT5UEEEh8Y45yRK3dec2pmMEg/viewform
