@@ -4,7 +4,7 @@
    it comes near the viewport and keeps its paper image until then, or when a script fails. */
 (function () {
   "use strict";
-  var UI = 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+  var UI = '"Helvetica Web", Helvetica, Arial, sans-serif';
   var INK = "#1d1a16", INK2 = "#4a443c", INK3 = "#7b7368", GRID = "#ece5d9", LINE = "#e6dfd3";
   var EMBER = "#e8743b", EMBER2 = "#c85a26", EMBER3 = "#a4471c", GLOW = "#f2a65a", STEEL = "#7f9cb8", SAND = "#c9a46e",
       PALE = "#f3c49c";
@@ -811,7 +811,7 @@
         });
         chart.setOption({
           textStyle: {fontFamily: UI, color: INK},
-          grid: {left: 54, right: 52, top: 12, bottom: 34},
+          grid: {left: 54, right: 52, top: 12, bottom: 38},   // room for the axis name below the ticks
           tooltip: Object.assign({}, TIP, {trigger: "axis", formatter: function (ps) {
             var s = "<div style='font-weight:600;margin-bottom:4px'>" + ps[0].value[0].toFixed(1) + " GPU hours</div>";
             ps.filter(function (p) { return p.seriesType === "line"; }).sort(function (a, b) { return a.value[1] - b.value[1]; }).forEach(function (p) {

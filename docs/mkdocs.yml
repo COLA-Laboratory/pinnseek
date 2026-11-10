@@ -11,9 +11,9 @@ theme:
   favicon: assets/img/pinnseek-icon.svg
   logo: assets/img/pinnseek-logo.svg
   language: en
-  font:
-    text: Inter
-    code: JetBrains Mono
+  # the fonts are set by overrides/main.html (block fonts) and assets/css/theme.css: Helvetica for text, served from
+  # assets/fonts where the system has no Helvetica, and JetBrains Mono for code
+  font: false
   palette:
     scheme: default
     primary: custom

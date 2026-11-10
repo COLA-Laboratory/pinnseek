@@ -8,7 +8,7 @@
     "\\pdn": "\\frac{\\partial^{#1} #2}{\\partial #3^{#1}}"
   };
   // the charts of the case pages in the palette of the landing page (assets/home/results.js; author, 2026-10-23)
-  var FONT = 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+  var FONT = '"Helvetica Web", Helvetica, Arial, sans-serif';
   var INK = "#1d1a16", INK2 = "#4a443c", INK3 = "#7b7368", GRID = "#ece5d9", AXIS = "#cfc6b9";
   var EMBER = "#e8743b", EMBER2 = "#c85a26", PALE = "#f3c49c", PALE_EDGE = "#d29466";
   var TIP = {backgroundColor: "#fffdf9", borderColor: "#e6dfd3", borderWidth: 1, padding: [9, 12],
@@ -86,7 +86,7 @@
     var methods = Object.keys(data.colors), others = methods.slice(1);
     // the palette of the landing page: the discovered solvers in ember, the four methods in muted tones
     var COLOR = {"Discovered PINN solver": "#e8743b", "Scale-PINN": "#4a443c", "APTS": "#7f9cb8", "SPINN": "#cdb08a", "DSGNAR": "#a39a8f"};
-    var UI = 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    var UI = '"Helvetica Web", Helvetica, Arial, sans-serif';
     var INKW = "#1d1a16", INKW2 = "#4a443c", INKW3 = "#7b7368";
     var NOTRUN = {"no-setup": "setup exceeds the training time", "OOM": "out of GPU memory"};
     // each problem with the ratio of the best other method's mean error to that of the discovered solver,
@@ -222,6 +222,14 @@
       var m = b.slot.replace(/ [12]x$/, "");
       return COLOR[b.slot] || COLOR[m] || data.colors[b.slot] || data.colors[m];
     }
+    // ten bars leave a two-line label about 30 px on a phone, where the labels ran into each other: below 560 px
+    // each label is one line, turned to end under its bar
+    var slim = null;
+    function xLabel() {
+      slim = el.clientWidth < 560;
+      return slim ? {color: INK, interval: 0, fontSize: 10.5, rotate: 50, margin: 6, formatter: function (v) { return v.replace("\n", " "); }}
+                  : {color: INK, interval: 0, fontSize: 11, lineHeight: 14, rotate: 0, margin: 8, formatter: function (v) { return v; }};
+    }
     var ok = bars.filter(function (b) { return b.mean != null; });
     var lo = Math.pow(10, Math.floor(Math.log10(Math.min.apply(null, ok.map(function (b) { return b.min; })))));
     var hi = Math.pow(10, Math.ceil(Math.log10(Math.max.apply(null, ok.map(function (b) { return b.max; })) * 1.05)));
@@ -241,7 +249,7 @@
                  "<br>seeds: " + b.seeds.map(fmt).join(", ") + hint;
         }
       }),
-      xAxis: {type: "category", data: cats, axisLabel: {color: INK, interval: 0, fontSize: 11, lineHeight: 14},
+      xAxis: {type: "category", data: cats, axisLabel: xLabel(),
               axisTick: {show: false}, axisLine: {lineStyle: {color: AXIS}}},
       yAxis: {type: "log", logBase: 10, min: lo, max: hi, axisLabel: {formatter: logLabel, color: INK3, fontSize: 11.5},
               name: "Relative {i|L}² error", nameTextStyle: L2_RICH, nameLocation: "middle", nameGap: 40,
@@ -304,7 +312,10 @@
       showDriver("../", m, data.case, data.name, data.dirs[m], data.files[m], "run.py");
     });
     chart.getZr().on("mousemove", function (e) { chart.getZr().setCursorStyle(e.target ? "pointer" : "default"); });
-    window.addEventListener("resize", function () { chart.resize(); });
+    window.addEventListener("resize", function () {
+      if ((el.clientWidth < 560) !== slim) chart.setOption({xAxis: {axisLabel: xLabel()}});
+      chart.resize();
+    });
   }
 
   /* driver of a comparison method, with links to the other files of its folder */

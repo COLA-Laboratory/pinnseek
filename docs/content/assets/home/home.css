@@ -14,9 +14,9 @@
   --pfh-ember: #e8743b;
   --pfh-ember-2: #c85a26;
   --pfh-glow: #f6b26b;
-  --pfh-head: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
-  --pfh-body: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --pfh-mono: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;   /* labels and figures */
+  --pfh-head: "Helvetica Web", Helvetica, Arial, sans-serif;
+  --pfh-body: "Helvetica Web", Helvetica, Arial, sans-serif;
+  --pfh-mono: "Helvetica Web", Helvetica, Arial, sans-serif;   /* labels and figures */
   --pfh-code: "JetBrains Mono", ui-monospace, Consolas, monospace;                                /* code only */
   --pfh-radius: 14px;
 }
@@ -1055,3 +1055,17 @@ a.pfh-ka-btn { text-decoration: none; }
 @media (max-width: 600px) { .pfh-top { right: 14px; bottom: 14px; padding: 9px; } .pfh-top { font-size: 0; gap: 0; } }
 /* the paper section: its authors */
 .pfh-head .pfh-authors { margin-top: 10px; font: 600 clamp(15px, 1.3vw, 17px) var(--pfh-head); color: var(--pfh-ink); }
+
+/* Below the width of the tabs the navigation drawer lives in Material's main column, which the landing hides: there
+   the column stays, without height or content, so that the menu button opens the drawer (2026-11-10) */
+@media screen and (max-width: 76.234375em) {
+  body:has(.pfh) .md-main { display: block; flex: none; height: 0; }
+  body:has(.pfh) .md-main .md-content, body:has(.pfh) .md-main .md-sidebar--secondary { display: none; }
+}
+
+/* Type for Helvetica (2026-11-10). Its bold cut sets wider than the heads before it, so the large titles close up a
+   little. The label above a title keeps the ember and the space below it of .pfh-kicker, which the paragraph rules of
+   the section head and of the result columns took from it */
+.pfh-hero h1 { letter-spacing: -.03em; }
+.pfh-head h2 { letter-spacing: -.025em; }
+.pfh-head .pfh-kicker, .pfh-result-copy .pfh-kicker { margin: 0 0 14px; color: var(--pfh-ember-2); }

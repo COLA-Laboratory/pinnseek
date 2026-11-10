@@ -13,6 +13,19 @@
   --md-accent-fg-color: var(--pf-accent);
   --md-typeset-a-color: var(--pf-brown);
 }
+/* Text in Helvetica (author, 2026-11-10). Windows and Android carry no Helvetica, and a browser there answers the
+   name with Arial, so the family "Helvetica Web" takes the Helvetica of the system where one is installed and the
+   files of assets/fonts elsewhere: the Helvetica files the author supplied, cut to Latin, Greek and the signs of
+   formulas and packed as WOFF2. It has two weights; 500 shows as regular and 600 and above as bold. */
+@font-face { font-family: "Helvetica Web"; font-style: normal; font-weight: 400; font-display: swap;
+  src: local("Helvetica"), url("../fonts/helvetica-regular.woff2") format("woff2"); }
+@font-face { font-family: "Helvetica Web"; font-style: italic; font-weight: 400; font-display: swap;
+  src: local("Helvetica Oblique"), local("Helvetica-Oblique"), url("../fonts/helvetica-oblique.woff2") format("woff2"); }
+@font-face { font-family: "Helvetica Web"; font-style: normal; font-weight: 700; font-display: swap;
+  src: local("Helvetica Bold"), local("Helvetica-Bold"), url("../fonts/helvetica-bold.woff2") format("woff2"); }
+@font-face { font-family: "Helvetica Web"; font-style: italic; font-weight: 700; font-display: swap;
+  src: local("Helvetica Bold Oblique"), local("Helvetica-BoldOblique"), url("../fonts/helvetica-boldoblique.woff2") format("woff2"); }
+:root { --md-text-font: "Helvetica Web", Helvetica, Arial; --md-code-font: "JetBrains Mono"; }
 /* Material sets the link colour from the primary colour per colour scheme; keep it brown */
 [data-md-color-scheme] { --md-typeset-a-color: var(--pf-brown); }
 .md-header, .md-tabs { background-color: var(--md-primary-fg-color); }
